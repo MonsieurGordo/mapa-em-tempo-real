@@ -2,107 +2,139 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Mapa em Tempo Real</title>
+  <title>Mapa Interativo com Pesquisa</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
   <style>
-    #map {
-      height: 90vh;
-      width: 100%;
-    }
-    #search {
+    #map { height: 100vh; }
+    #searchBox {
       position: absolute;
       top: 10px;
       left: 10px;
       z-index: 1000;
       background: white;
-      padding: 6px 10px;
+      padding: 5px;
       border-radius: 5px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
+    #timestamp {
+      position: absolute;
+      bottom: 5px;
+      right: 5px;
+      font-size: 10px;
+      background-color: rgba(255,255,255,0.8);
+      padding: 2px 6px;
+      border-radius: 4px;
+      z-index: 1000;
+    }
+    .leaflet-control-zoom { display: none; } /* Remove os botões de + e - */
   </style>
 </head>
 <body>
+  <input type="text" id="searchBox" placeholder="Buscar por nome ou coordenada..." />
+  <div id="map"></div>
+  <div id="timestamp"></div>
 
-<div id="search">
-  🔍 <input type="text" id="searchInput" placeholder="Buscar por nome..." />
-</div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([-15.601410, -56.097891], 12);
 
-<div id="map"></div>
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    const url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ8uCmo9n7QA6acDlK4aGNTzL6tt6DKBH7lYUnk409SCOlrx6wc2YIt_bRcZ4jkXjQ5VdXOJvZ1Pjx9/pub?gid=0&single=true&output=csv';
+    let markers = [];
+    let redMarker = null;
 
-<script>
-const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ8uCmo9n7QA6acDlK4aGNTzL6tt6DKBH7lYUnk409SCOlrx6wc2YIt_bRcZ4jkXjQ5VdXOJvZ1Pjx9/pub?gid=0&single=true&output=csv";
+    function limparMarcadoresDestacados() {
+      if (redMarker) {
+        map.removeLayer(redMarker);
+        redMarker = null;
+      }
+      markers.forEach(m => {
+        m.setIcon(defaultIcon);
+      });
+    }
 
-let map = L.map('map').setView([-15.6, -56.1], 5);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19
-}).addTo(map);
+    const defaultIcon = L.icon({
+      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
+    });
 
-let markers = [];
+    const greenIcon = new L.Icon({
+      iconUrl: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+      iconSize: [32, 32]
+    });
 
-function fetchDataAndUpdateMap() {
-  fetch(csvUrl)
-    .then(response => response.text())
-    .then(csv => {
-      const rows = csv.trim().split("\n").slice(1);
-      markers.forEach(marker => map.removeLayer(marker));
+    const orangeIcon = new L.Icon({
+      iconUrl: 'https://maps.google.com/mapfiles/ms/icons/orange-dot.png',
+      iconSize: [32, 32]
+    });
+
+    async function carregarDados() {
+      const response = await fetch(url);
+      const data = await response.text();
+      const linhas = data.split('\n').slice(1);
+      limparMarcadoresDestacados();
+      markers.forEach(m => map.removeLayer(m));
       markers = [];
 
-      rows.forEach(row => {
-        const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); // CSV seguro
-        const [service_id, nome, datahora, lat, lon, endereco, protocolo, status, obs] = cols.map(c => c.replace(/(^"|"$)/g, ""));
+      linhas.forEach(l => {
+        const cols = l.split(',');
+        if (cols.length < 9) return;
+        const [service_id, nome, datahora, lat, lng, endereco, protocolo, status, observacoes] = cols;
 
-        if (!lat || !lon) return;
-
-        const marker = L.marker([parseFloat(lat), parseFloat(lon)]).addTo(map);
-
-        marker.bindTooltip(nome, {
-          permanent: true,
-          direction: "top",
-          offset: [0, -10],
-          className: "tooltip-nome"
-        }).openTooltip();
-
-        marker.bindPopup(`
-          <b>Service ID:</b> ${service_id}<br/>
-          <b>Nome:</b> ${nome}<br/>
-          <b>Data/Hora:</b> ${datahora}<br/>
-          <b>Latitude:</b> ${lat}<br/>
-          <b>Longitude:</b> ${lon}<br/>
-          <b>Endereço:</b> ${endereco}<br/>
-          <b>Protocolo:</b> ${protocolo}<br/>
-          <b>Status:</b> ${status}<br/>
-          <b>Observações:</b> ${obs}
-        `);
-
-        marker.nome = nome.toLowerCase();
+        const marker = L.marker([+lat, +lng], { icon: defaultIcon }).addTo(map);
+        marker.bindTooltip(nome).openTooltip();
+        marker.bindPopup(
+          `<b>service_id:</b> ${service_id}<br><b>nome:</b> ${nome}<br><b>datahora:</b> ${datahora}<br>
+           <b>latitude:</b> ${lat}<br><b>longitude:</b> ${lng}<br><b>endereco:</b> ${endereco}<br>
+           <b>protocolo:</b> ${protocolo}<br><b>status:</b> ${status}<br><b>observações:</b> ${observacoes}`
+        );
+        marker.data = { nome, lat: +lat, lng: +lng };
         markers.push(marker);
       });
-    });
-}
 
-// Atualizar a cada 3 minutos (180.000 ms)
-fetchDataAndUpdateMap();
-setInterval(fetchDataAndUpdateMap, 180000);
-
-// Filtro de busca
-document.getElementById("searchInput").addEventListener("input", e => {
-  const termo = e.target.value.toLowerCase();
-  markers.forEach(marker => {
-    if (!marker.nome.includes(termo)) {
-      map.removeLayer(marker);
-    } else {
-      marker.addTo(map);
+      document.getElementById('timestamp').innerText = `Última atualização: ${new Date().toLocaleString()}`;
     }
-  });
-});
-</script>
 
+    carregarDados();
+    setInterval(carregarDados, 60000); // Atualização a cada 60 segundos
+
+    document.getElementById('searchBox').addEventListener('input', function(e) {
+      const valor = e.target.value.trim();
+      limparMarcadoresDestacados();
+
+      // Verifica se é coordenada
+      const coordMatch = valor.match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
+      if (coordMatch) {
+        const lat = parseFloat(coordMatch[1]);
+        const lng = parseFloat(coordMatch[2]);
+        redMarker = L.marker([lat, lng], {
+          icon: L.icon({ iconUrl: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png', iconSize: [32, 32] })
+        }).addTo(map);
+        map.setView([lat, lng], 14);
+
+        // calcular distâncias e destacar dois mais próximos
+        const distancias = markers.map(m => ({
+          marker: m,
+          dist: Math.sqrt((m.data.lat - lat)**2 + (m.data.lng - lng)**2)
+        }));
+        distancias.sort((a, b) => a.dist - b.dist);
+        if (distancias[0]) distancias[0].marker.setIcon(greenIcon);
+        if (distancias[1]) distancias[1].marker.setIcon(orangeIcon);
+        return;
+      }
+
+      // Se for nome, filtra os marcadores e mostra o popup
+      markers.forEach(m => {
+        if (m.data.nome.toLowerCase().includes(valor.toLowerCase())) {
+          m.openPopup();
+        } else {
+          m.closePopup();
+        }
+      });
+    });
+  </script>
 </body>
 </html>
