@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Mapa em Tempo Real</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    #map {
+      height: 90vh;
+      width: 100%;
+    }
+    #search {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 6px 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+
+<div id="search">
+  🔍 <input type="text" id="searchInput" placeholder="Buscar por nome..." />
+</div>
+
+<div id="map"></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ8uCmo9n7QA6acDlK4aGNTzL6tt6DKBH7lYUnk409SCOlrx6wc2YIt_bRcZ4jkXjQ5VdXOJvZ1Pjx9/pub?gid=0&single=true&output=csv";
+
+let map = L.map('map').setView([-15.6, -56.1], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19
+}).addTo(map);
+
+let markers = [];
+
+function fetchDataAndUpdateMap() {
+  fetch(csvUrl)
+    .then(response => response.text())
+    .then(csv => {
+      const rows = csv.trim().split("\n").slice(1);
+      markers.forEach(marker => map.removeLayer(marker));
+      markers = [];
+
+      rows.forEach(row => {
+        const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); // CSV seguro
+        const [service_id, nome, datahora, lat, lon, endereco, protocolo, status, obs] = cols.map(c => c.replace(/(^"|"$)/g, ""));
+
+        if (!lat || !lon) return;
+
+        const marker = L.marker([parseFloat(lat), parseFloat(lon)]).addTo(map);
+
+        marker.bindTooltip(nome, {
+          permanent: true,
+          direction: "top",
+          offset: [0, -10],
+          className: "tooltip-nome"
+        }).openTooltip();
+
+        marker.bindPopup(`
+          <b>Service ID:</b> ${service_id}<br/>
+          <b>Nome:</b> ${nome}<br/>
+          <b>Data/Hora:</b> ${datahora}<br/>
+          <b>Latitude:</b> ${lat}<br/>
+          <b>Longitude:</b> ${lon}<br/>
+          <b>Endereço:</b> ${endereco}<br/>
+          <b>Protocolo:</b> ${protocolo}<br/>
+          <b>Status:</b> ${status}<br/>
+          <b>Observações:</b> ${obs}
+        `);
+
+        marker.nome = nome.toLowerCase();
+        markers.push(marker);
+      });
+    });
+}
+
+// Atualizar a cada 3 minutos (180.000 ms)
+fetchDataAndUpdateMap();
+setInterval(fetchDataAndUpdateMap, 180000);
+
+// Filtro de busca
+document.getElementById("searchInput").addEventListener("input", e => {
+  const termo = e.target.value.toLowerCase();
+  markers.forEach(marker => {
+    if (!marker.nome.includes(termo)) {
+      map.removeLayer(marker);
+    } else {
+      marker.addTo(map);
+    }
+  });
+});
+</script>
+
+</body>
+</html>
