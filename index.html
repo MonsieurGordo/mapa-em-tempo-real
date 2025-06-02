@@ -17,16 +17,26 @@
       overflow-y: auto;
       box-shadow: 2px 0 5px rgba(0,0,0,0.1);
       transition: transform 0.3s;
+      z-index: 1001;
     }
     .sidebar.minimized { transform: translateX(-100%); }
-    .toggle-sidebar { position: absolute; top: 10px; left: 260px; z-index: 1000; }
+    .toggle-sidebar {
+      position: absolute;
+      top: 10px;
+      left: 260px;
+      z-index: 1002;
+    }
     .marker-label {
       background-color: white;
-      padding: 2px 4px;
+      padding: 4px 6px;
       border-radius: 4px;
-      font-size: 12px;
+      font-size: 13px;
       color: black;
       border: 1px solid #ccc;
+      white-space: nowrap;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   </style>
 </head>
@@ -48,10 +58,11 @@
     let map;
     let markersLayer;
 
-    // URL pública da planilha no formato JSON (via Google Visualization API)
     const SHEET_ID = '1C8RlFUa9FEmiAUVrNYC7PTRUTGepkVXXwsND5Oo7C1Y';
     const SHEET_NAME = 'Localizações';
     const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
+
+    const ICON_URL = 'https://maps.gstatic.com/mapfiles/api-3/images/spotlight-poi2.png';
 
     function toggleSidebar() {
       document.getElementById('sidebar').classList.toggle('minimized');
@@ -59,18 +70,34 @@
 
     function loadView(view) {
       alert(`Carregando view: ${view}`);
-      // Aqui você pode carregar outras views como Histórico ou Criar Rota
+    }
+
+    function formatDateTime(serializedDate) {
+      const match = serializedDate.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+      if (!match) return serializedDate;
+      const [_, year, month, day, hour, minute, second] = match.map(Number);
+      const date = new Date(year, month, day, hour, minute, second);
+      const pad = num => num.toString().padStart(2, '0');
+      const hours12 = date.getHours() % 12 || 12;
+      const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
+      return `${pad(day)}/${pad(month + 1)}/${year} ${pad(hours12)}:${pad(minute)}:${pad(second)} ${ampm}`;
+    }
+
+    function getMarkerColor(estado) {
+      const est = estado.toLowerCase();
+      if (est === 'ativo') return '#5A73D4FE';    // azul
+      if (est === 'inativo') return '#F44336';    // vermelho
+      if (est === 'manutenção') return '#FF9800'; // laranja
+      if (est === 'ok') return '#8BC34A';         // verde
+      return '#999';                              // padrão
     }
 
     function initMap() {
       map = L.map('map').setView([-15.6, -56.1], 12);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18,
-      }).addTo(map);
-
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
       markersLayer = L.layerGroup().addTo(map);
       fetchData();
-      setInterval(fetchData, 60000); // Atualiza a cada 60 segundos
+      setInterval(fetchData, 60000);
     }
 
     function fetchData() {
@@ -79,7 +106,6 @@
         .then(text => {
           const json = JSON.parse(text.substring(47).slice(0, -2));
           const rows = json.table.rows;
-
           markersLayer.clearLayers();
 
           rows.forEach(row => {
@@ -96,34 +122,35 @@
 
             if (!LAT || !LNG) return;
 
-            const color = ESTADO.toLowerCase() === 'ativo' ? 'blue' : 'red';
-            const icon = L.circleMarker([LAT, LNG], {
-              radius: 8,
-              color: color,
-              fillColor: color,
-              fillOpacity: 0.8
-            }).addTo(markersLayer);
+            const icon = L.icon({
+              iconUrl: ICON_URL,
+              iconSize: [27, 43],
+              iconAnchor: [13, 42],
+              popupAnchor: [0, -42],
+              className: 'custom-pin'
+            });
 
-            // Rótulo acima do marcador
-            const label = L.marker([LAT, LNG], {
+            L.marker([LAT, LNG], { icon: icon })
+              .addTo(markersLayer)
+              .bindPopup(`
+                <strong>Nome:</strong> ${NOME}<br>
+                <strong>Data/Hora:</strong> ${formatDateTime(DATAHORA)}<br>
+                <strong>Latitude:</strong> ${LAT}<br>
+                <strong>Longitude:</strong> ${LNG}<br>
+                <strong>Endereço:</strong> ${ENDERECO}<br>
+                <strong>Estado:</strong> ${ESTADO}<br>
+                <strong>Protocolo:</strong> ${PROTOCOLO}<br>
+                <strong>Status:</strong> ${STATUS}<br>
+                <strong>Observações:</strong> ${OBS}
+              `);
+
+            L.marker([LAT, LNG], {
               icon: L.divIcon({
                 className: 'marker-label',
                 html: NOME,
                 iconAnchor: [0, 0]
               })
             }).addTo(markersLayer);
-
-            icon.bindPopup(`
-              <strong>Nome:</strong> ${NOME}<br>
-              <strong>Data/Hora:</strong> ${DATAHORA}<br>
-              <strong>Latitude:</strong> ${LAT}<br>
-              <strong>Longitude:</strong> ${LNG}<br>
-              <strong>Endereço:</strong> ${ENDERECO}<br>
-              <strong>Estado:</strong> ${ESTADO}<br>
-              <strong>Protocolo:</strong> ${PROTOCOLO}<br>
-              <strong>Status:</strong> ${STATUS}<br>
-              <strong>Observações:</strong> ${OBS}
-            `);
           });
         });
     }
