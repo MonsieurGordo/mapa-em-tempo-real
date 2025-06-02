@@ -1,140 +1,239 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <title>Mapa Interativo com Pesquisa</title>
+  <meta charset="UTF-8">
+  <title>Mapa de Dispositivos</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    #map { height: 100vh; }
-    #searchBox {
+    /* Estilos gerais */
+    body { margin: 0; font-family: Arial, sans-serif; }
+    #map { height: 100vh; width: 100%; }
+
+    /* Estilos do menu lateral */
+    #sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      height: 100%;
+      width: 250px;
+      background: #333;
+      color: white;
+      padding: 1rem;
+      overflow-y: auto;
+      transition: width 0.3s;
+    }
+    #sidebar.minimized { width: 40px; }
+    #sidebar h2 { margin-top: 0; }
+    #sidebar button { margin: 5px 0; width: 100%; }
+    #toggleSidebar {
       position: absolute;
       top: 10px;
-      left: 10px;
-      z-index: 1000;
-      background: white;
+      right: -30px;
+      background: #333;
+      color: white;
+      border: none;
       padding: 5px;
-      border-radius: 5px;
+      cursor: pointer;
     }
-    #timestamp {
-      position: absolute;
-      bottom: 5px;
-      right: 5px;
-      font-size: 10px;
-      background-color: rgba(255,255,255,0.8);
-      padding: 2px 6px;
-      border-radius: 4px;
-      z-index: 1000;
+
+    #mapContainer { margin-left: 250px; transition: margin-left 0.3s; }
+    #sidebar.minimized + #mapContainer { margin-left: 40px; }
+
+    .label-marker {
+      background: white;
+      padding: 2px 4px;
+      border: 1px solid #ccc;
+      font-size: 12px;
     }
-    .leaflet-control-zoom { display: none; } /* Remove os botões de + e - */
   </style>
 </head>
 <body>
-  <input type="text" id="searchBox" placeholder="Buscar por nome ou coordenada..." />
-  <div id="map"></div>
-  <div id="timestamp"></div>
+  <div id="sidebar">
+    <button id="toggleSidebar">⇔</button>
+    <h2>Menu</h2>
+    <button onclick="showTab('localizacoes')">Localizações</button>
+    <button onclick="showTab('historico')">Histórico</button>
+    <button onclick="showTab('rota')">Criar Rota</button>
+    <div id="filtros"></div>
+  </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <div id="mapContainer">
+    <div id="map"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    const map = L.map('map').setView([-15.601410, -56.097891], 12);
+    // Dados simulados — Substitua isso por sua leitura do Google Sheets ou backend
+    const localizacoes = [
+      { nome: "Dispositivo 1", status: "Ativo", lat: -15.6, lng: -56.1, protocolo: "123", datahora: "2024-06-01 08:00", endereco: "Rua A", estado: "MT", observacoes: "" },
+      { nome: "Dispositivo 2", status: "Inativo", lat: -15.61, lng: -56.11, protocolo: "", datahora: "2024-06-01 09:00", endereco: "Rua B", estado: "MT", observacoes: "N/A" },
+    ];
 
+    const historico = [
+      { id: 1, nome: "Equipe A", datahora: "2024-06-01 10:00", lat: -15.6, lng: -56.1, protocolo: "321" },
+      { id: 2, nome: "Equipe B", datahora: "2024-06-01 10:05", lat: -15.599, lng: -56.09, protocolo: "654" },
+    ];
+
+    let map = L.map('map').setView([-15.6, -56.1], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    const url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ8uCmo9n7QA6acDlK4aGNTzL6tt6DKBH7lYUnk409SCOlrx6wc2YIt_bRcZ4jkXjQ5VdXOJvZ1Pjx9/pub?gid=0&single=true&output=csv';
     let markers = [];
-    let redMarker = null;
 
-    function limparMarcadoresDestacados() {
-      if (redMarker) {
-        map.removeLayer(redMarker);
-        redMarker = null;
-      }
-      markers.forEach(m => {
-        m.setIcon(defaultIcon);
-      });
-    }
-
-    const defaultIcon = L.icon({
-      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
-    });
-
-    const greenIcon = new L.Icon({
-      iconUrl: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
-      iconSize: [32, 32]
-    });
-
-    const orangeIcon = new L.Icon({
-      iconUrl: 'https://maps.google.com/mapfiles/ms/icons/orange-dot.png',
-      iconSize: [32, 32]
-    });
-
-    async function carregarDados() {
-      const response = await fetch(url);
-      const data = await response.text();
-      const linhas = data.split('\n').slice(1);
-      limparMarcadoresDestacados();
+    function clearMarkers() {
       markers.forEach(m => map.removeLayer(m));
       markers = [];
-
-      linhas.forEach(l => {
-        const cols = l.split(',');
-        if (cols.length < 9) return;
-        const [service_id, nome, datahora, lat, lng, endereco, protocolo, status, observacoes] = cols;
-
-        const marker = L.marker([+lat, +lng], { icon: defaultIcon }).addTo(map);
-        marker.bindTooltip(nome).openTooltip();
-        marker.bindPopup(
-          `<b>service_id:</b> ${service_id}<br><b>nome:</b> ${nome}<br><b>datahora:</b> ${datahora}<br>
-           <b>latitude:</b> ${lat}<br><b>longitude:</b> ${lng}<br><b>endereco:</b> ${endereco}<br>
-           <b>protocolo:</b> ${protocolo}<br><b>status:</b> ${status}<br><b>observações:</b> ${observacoes}`
-        );
-        marker.data = { nome, lat: +lat, lng: +lng };
-        markers.push(marker);
-      });
-
-      document.getElementById('timestamp').innerText = `Última atualização: ${new Date().toLocaleString()}`;
     }
 
-    carregarDados();
-    setInterval(carregarDados, 60000); // Atualização a cada 60 segundos
+    function showTab(tab) {
+      clearMarkers();
+      document.getElementById("filtros").innerHTML = "";
 
-    document.getElementById('searchBox').addEventListener('input', function(e) {
-      const valor = e.target.value.trim();
-      limparMarcadoresDestacados();
-
-      // Verifica se é coordenada
-      const coordMatch = valor.match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
-      if (coordMatch) {
-        const lat = parseFloat(coordMatch[1]);
-        const lng = parseFloat(coordMatch[2]);
-        redMarker = L.marker([lat, lng], {
-          icon: L.icon({ iconUrl: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png', iconSize: [32, 32] })
-        }).addTo(map);
-        map.setView([lat, lng], 14);
-
-        // calcular distâncias e destacar dois mais próximos
-        const distancias = markers.map(m => ({
-          marker: m,
-          dist: Math.sqrt((m.data.lat - lat)**2 + (m.data.lng - lng)**2)
-        }));
-        distancias.sort((a, b) => a.dist - b.dist);
-        if (distancias[0]) distancias[0].marker.setIcon(greenIcon);
-        if (distancias[1]) distancias[1].marker.setIcon(orangeIcon);
-        return;
+      if (tab === 'localizacoes') {
+        showLocalizacoes();
+      } else if (tab === 'historico') {
+        showHistorico();
+      } else if (tab === 'rota') {
+        showRota();
       }
+    }
 
-      // Se for nome, filtra os marcadores e mostra o popup
-      markers.forEach(m => {
-        if (m.data.nome.toLowerCase().includes(valor.toLowerCase())) {
-          m.openPopup();
-        } else {
-          m.closePopup();
+    // Função Localizações
+    function showLocalizacoes() {
+      localizacoes.forEach(d => {
+        const iconColor = d.status === "Ativo" ? "blue" : "red";
+        const marker = L.circleMarker([d.lat, d.lng], {
+          radius: 8,
+          color: iconColor,
+          fillColor: iconColor,
+          fillOpacity: 1
+        }).addTo(map);
+
+        L.marker([d.lat, d.lng], {
+          icon: L.divIcon({
+            className: 'label-marker',
+            html: d.nome,
+            iconSize: [100, 20],
+            iconAnchor: [50, 20]
+          })
+        }).addTo(map);
+
+        marker.bindPopup(`
+          <strong>${d.nome}</strong><br>
+          Data/Hora: ${d.datahora}<br>
+          Latitude: ${d.lat}<br>
+          Longitude: ${d.lng}<br>
+          Endereço: ${d.endereco}<br>
+          Estado: ${d.estado}<br>
+          Protocolo: ${d.protocolo}<br>
+          Status: ${d.status}<br>
+          Observações: ${d.observacoes}
+        `);
+        markers.push(marker);
+      });
+    }
+
+    // Função Histórico
+    function showHistorico() {
+      const container = document.getElementById("filtros");
+      container.innerHTML = `
+        <label>Coordenadas (lat,lng): <input id="coord" /></label><br>
+        <label>Data (opcional): <input id="data" type="date" /></label>
+        <button onclick="filtrarHistorico()">Pesquisar</button>
+      `;
+    }
+
+    function filtrarHistorico() {
+      clearMarkers();
+      const [lat, lng] = document.getElementById("coord").value.split(',').map(Number);
+
+      historico.forEach(d => {
+        const dist = map.distance([lat, lng], [d.lat, d.lng]);
+        if (dist <= 1000) {
+          const marker = L.circleMarker([d.lat, d.lng], {
+            radius: 8,
+            color: 'purple',
+            fillColor: 'purple',
+            fillOpacity: 1
+          }).addTo(map);
+
+          marker.bindPopup(`
+            ID: ${d.id}<br>
+            Nome/Equipe: ${d.nome}<br>
+            DataHora: ${d.datahora}<br>
+            Latitude: ${d.lat}<br>
+            Longitude: ${d.lng}<br>
+            Protocolo: ${d.protocolo}
+          `);
+
+          markers.push(marker);
         }
       });
-    });
+    }
+
+    // Função Rota
+    function showRota() {
+      const container = document.getElementById("filtros");
+      container.innerHTML = `
+        <label>Destino (lat,lng): <input id="rotaCoord" /></label>
+        <button onclick="calcularRota()">Calcular</button>
+      `;
+
+      // Exibir todos os dispositivos inicialmente
+      showLocalizacoes();
+    }
+
+    function calcularRota() {
+      clearMarkers();
+      const [lat, lng] = document.getElementById("rotaCoord").value.split(',').map(Number);
+
+      L.marker([lat, lng], { title: 'Destino' }).addTo(map);
+      map.setView([lat, lng], 15);
+
+      const distancias = localizacoes.map((d, i) => ({
+        index: i,
+        distancia: map.distance([lat, lng], [d.lat, d.lng])
+      })).sort((a, b) => a.distancia - b.distancia);
+
+      localizacoes.forEach((d, i) => {
+        let color = d.status === 'Ativo' ? 'blue' : 'red';
+        if (i === distancias[0].index) color = 'green';
+        else if (i === distancias[1].index) color = 'orange';
+
+        const marker = L.circleMarker([d.lat, d.lng], {
+          radius: 8,
+          color,
+          fillColor: color,
+          fillOpacity: 1
+        }).addTo(map);
+
+        L.marker([d.lat, d.lng], {
+          icon: L.divIcon({
+            className: 'label-marker',
+            html: d.nome,
+            iconSize: [100, 20],
+            iconAnchor: [50, 20]
+          })
+        }).addTo(map);
+
+        markers.push(marker);
+      });
+    }
+
+    // Sidebar toggle
+    document.getElementById("toggleSidebar").onclick = () => {
+      document.getElementById("sidebar").classList.toggle("minimized");
+      document.getElementById("mapContainer").classList.toggle("minimized");
+    };
+
+    // Atualização automática a cada 60 segundos
+    setInterval(() => {
+      if (currentTab === 'localizacoes') showLocalizacoes();
+    }, 60000);
+
+    let currentTab = 'localizacoes';
+    showTab(currentTab);
   </script>
 </body>
 </html>
