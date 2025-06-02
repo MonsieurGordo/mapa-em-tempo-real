@@ -2,238 +2,133 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Mapa de Dispositivos</title>
+  <title>Mapa - Localizações</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <style>
-    /* Estilos gerais */
-    body { margin: 0; font-family: Arial, sans-serif; }
     #map { height: 100vh; width: 100%; }
-
-    /* Estilos do menu lateral */
-    #sidebar {
-      position: fixed;
+    .sidebar {
+      position: absolute;
       top: 0; left: 0;
-      height: 100%;
       width: 250px;
-      background: #333;
-      color: white;
+      height: 100%;
+      background: #fff;
       padding: 1rem;
       overflow-y: auto;
-      transition: width 0.3s;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+      transition: transform 0.3s;
     }
-    #sidebar.minimized { width: 40px; }
-    #sidebar h2 { margin-top: 0; }
-    #sidebar button { margin: 5px 0; width: 100%; }
-    #toggleSidebar {
-      position: absolute;
-      top: 10px;
-      right: -30px;
-      background: #333;
-      color: white;
-      border: none;
-      padding: 5px;
-      cursor: pointer;
-    }
-
-    #mapContainer { margin-left: 250px; transition: margin-left 0.3s; }
-    #sidebar.minimized + #mapContainer { margin-left: 40px; }
-
-    .label-marker {
-      background: white;
+    .sidebar.minimized { transform: translateX(-100%); }
+    .toggle-sidebar { position: absolute; top: 10px; left: 260px; z-index: 1000; }
+    .marker-label {
+      background-color: white;
       padding: 2px 4px;
-      border: 1px solid #ccc;
+      border-radius: 4px;
       font-size: 12px;
+      color: black;
+      border: 1px solid #ccc;
     }
   </style>
 </head>
 <body>
-  <div id="sidebar">
-    <button id="toggleSidebar">⇔</button>
-    <h2>Menu</h2>
-    <button onclick="showTab('localizacoes')">Localizações</button>
-    <button onclick="showTab('historico')">Histórico</button>
-    <button onclick="showTab('rota')">Criar Rota</button>
-    <div id="filtros"></div>
+  <button class="toggle-sidebar" onclick="toggleSidebar()">☰ Menu</button>
+  <div class="sidebar" id="sidebar">
+    <h3>Menu</h3>
+    <ul>
+      <li><button onclick="loadView('localizacoes')">Localizações</button></li>
+      <li><button onclick="loadView('historico')">Histórico</button></li>
+      <li><button onclick="loadView('rota')">Criar Rota</button></li>
+    </ul>
   </div>
 
-  <div id="mapContainer">
-    <div id="map"></div>
-  </div>
+  <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script>
-    // Dados simulados — Substitua isso por sua leitura do Google Sheets ou backend
-    const localizacoes = [
-      { nome: "Dispositivo 1", status: "Ativo", lat: -15.6, lng: -56.1, protocolo: "123", datahora: "2024-06-01 08:00", endereco: "Rua A", estado: "MT", observacoes: "" },
-      { nome: "Dispositivo 2", status: "Inativo", lat: -15.61, lng: -56.11, protocolo: "", datahora: "2024-06-01 09:00", endereco: "Rua B", estado: "MT", observacoes: "N/A" },
-    ];
+    let map;
+    let markersLayer;
 
-    const historico = [
-      { id: 1, nome: "Equipe A", datahora: "2024-06-01 10:00", lat: -15.6, lng: -56.1, protocolo: "321" },
-      { id: 2, nome: "Equipe B", datahora: "2024-06-01 10:05", lat: -15.599, lng: -56.09, protocolo: "654" },
-    ];
+    // URL pública da planilha no formato JSON (via Google Visualization API)
+    const SHEET_ID = '1C8RlFUa9FEmiAUVrNYC7PTRUTGepkVXXwsND5Oo7C1Y';
+    const SHEET_NAME = 'Localizações';
+    const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
 
-    let map = L.map('map').setView([-15.6, -56.1], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    let markers = [];
-
-    function clearMarkers() {
-      markers.forEach(m => map.removeLayer(m));
-      markers = [];
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('minimized');
     }
 
-    function showTab(tab) {
-      clearMarkers();
-      document.getElementById("filtros").innerHTML = "";
-
-      if (tab === 'localizacoes') {
-        showLocalizacoes();
-      } else if (tab === 'historico') {
-        showHistorico();
-      } else if (tab === 'rota') {
-        showRota();
-      }
+    function loadView(view) {
+      alert(`Carregando view: ${view}`);
+      // Aqui você pode carregar outras views como Histórico ou Criar Rota
     }
 
-    // Função Localizações
-    function showLocalizacoes() {
-      localizacoes.forEach(d => {
-        const iconColor = d.status === "Ativo" ? "blue" : "red";
-        const marker = L.circleMarker([d.lat, d.lng], {
-          radius: 8,
-          color: iconColor,
-          fillColor: iconColor,
-          fillOpacity: 1
-        }).addTo(map);
+    function initMap() {
+      map = L.map('map').setView([-15.6, -56.1], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+      }).addTo(map);
 
-        L.marker([d.lat, d.lng], {
-          icon: L.divIcon({
-            className: 'label-marker',
-            html: d.nome,
-            iconSize: [100, 20],
-            iconAnchor: [50, 20]
-          })
-        }).addTo(map);
-
-        marker.bindPopup(`
-          <strong>${d.nome}</strong><br>
-          Data/Hora: ${d.datahora}<br>
-          Latitude: ${d.lat}<br>
-          Longitude: ${d.lng}<br>
-          Endereço: ${d.endereco}<br>
-          Estado: ${d.estado}<br>
-          Protocolo: ${d.protocolo}<br>
-          Status: ${d.status}<br>
-          Observações: ${d.observacoes}
-        `);
-        markers.push(marker);
-      });
+      markersLayer = L.layerGroup().addTo(map);
+      fetchData();
+      setInterval(fetchData, 60000); // Atualiza a cada 60 segundos
     }
 
-    // Função Histórico
-    function showHistorico() {
-      const container = document.getElementById("filtros");
-      container.innerHTML = `
-        <label>Coordenadas (lat,lng): <input id="coord" /></label><br>
-        <label>Data (opcional): <input id="data" type="date" /></label>
-        <button onclick="filtrarHistorico()">Pesquisar</button>
-      `;
+    function fetchData() {
+      fetch(SHEET_URL)
+        .then(res => res.text())
+        .then(text => {
+          const json = JSON.parse(text.substring(47).slice(0, -2));
+          const rows = json.table.rows;
+
+          markersLayer.clearLayers();
+
+          rows.forEach(row => {
+            const ID = row.c[0]?.v || '';
+            const NOME = row.c[1]?.v || '';
+            const DATAHORA = row.c[2]?.v || '';
+            const LAT = row.c[3]?.v || '';
+            const LNG = row.c[4]?.v || '';
+            const ENDERECO = row.c[5]?.v || '';
+            const ESTADO = row.c[6]?.v || '';
+            const PROTOCOLO = row.c[7]?.v || '';
+            const STATUS = row.c[8]?.v || '';
+            const OBS = row.c[9]?.v || '';
+
+            if (!LAT || !LNG) return;
+
+            const color = ESTADO.toLowerCase() === 'ativo' ? 'blue' : 'red';
+            const icon = L.circleMarker([LAT, LNG], {
+              radius: 8,
+              color: color,
+              fillColor: color,
+              fillOpacity: 0.8
+            }).addTo(markersLayer);
+
+            // Rótulo acima do marcador
+            const label = L.marker([LAT, LNG], {
+              icon: L.divIcon({
+                className: 'marker-label',
+                html: NOME,
+                iconAnchor: [0, 0]
+              })
+            }).addTo(markersLayer);
+
+            icon.bindPopup(`
+              <strong>Nome:</strong> ${NOME}<br>
+              <strong>Data/Hora:</strong> ${DATAHORA}<br>
+              <strong>Latitude:</strong> ${LAT}<br>
+              <strong>Longitude:</strong> ${LNG}<br>
+              <strong>Endereço:</strong> ${ENDERECO}<br>
+              <strong>Estado:</strong> ${ESTADO}<br>
+              <strong>Protocolo:</strong> ${PROTOCOLO}<br>
+              <strong>Status:</strong> ${STATUS}<br>
+              <strong>Observações:</strong> ${OBS}
+            `);
+          });
+        });
     }
 
-    function filtrarHistorico() {
-      clearMarkers();
-      const [lat, lng] = document.getElementById("coord").value.split(',').map(Number);
-
-      historico.forEach(d => {
-        const dist = map.distance([lat, lng], [d.lat, d.lng]);
-        if (dist <= 1000) {
-          const marker = L.circleMarker([d.lat, d.lng], {
-            radius: 8,
-            color: 'purple',
-            fillColor: 'purple',
-            fillOpacity: 1
-          }).addTo(map);
-
-          marker.bindPopup(`
-            ID: ${d.id}<br>
-            Nome/Equipe: ${d.nome}<br>
-            DataHora: ${d.datahora}<br>
-            Latitude: ${d.lat}<br>
-            Longitude: ${d.lng}<br>
-            Protocolo: ${d.protocolo}
-          `);
-
-          markers.push(marker);
-        }
-      });
-    }
-
-    // Função Rota
-    function showRota() {
-      const container = document.getElementById("filtros");
-      container.innerHTML = `
-        <label>Destino (lat,lng): <input id="rotaCoord" /></label>
-        <button onclick="calcularRota()">Calcular</button>
-      `;
-
-      // Exibir todos os dispositivos inicialmente
-      showLocalizacoes();
-    }
-
-    function calcularRota() {
-      clearMarkers();
-      const [lat, lng] = document.getElementById("rotaCoord").value.split(',').map(Number);
-
-      L.marker([lat, lng], { title: 'Destino' }).addTo(map);
-      map.setView([lat, lng], 15);
-
-      const distancias = localizacoes.map((d, i) => ({
-        index: i,
-        distancia: map.distance([lat, lng], [d.lat, d.lng])
-      })).sort((a, b) => a.distancia - b.distancia);
-
-      localizacoes.forEach((d, i) => {
-        let color = d.status === 'Ativo' ? 'blue' : 'red';
-        if (i === distancias[0].index) color = 'green';
-        else if (i === distancias[1].index) color = 'orange';
-
-        const marker = L.circleMarker([d.lat, d.lng], {
-          radius: 8,
-          color,
-          fillColor: color,
-          fillOpacity: 1
-        }).addTo(map);
-
-        L.marker([d.lat, d.lng], {
-          icon: L.divIcon({
-            className: 'label-marker',
-            html: d.nome,
-            iconSize: [100, 20],
-            iconAnchor: [50, 20]
-          })
-        }).addTo(map);
-
-        markers.push(marker);
-      });
-    }
-
-    // Sidebar toggle
-    document.getElementById("toggleSidebar").onclick = () => {
-      document.getElementById("sidebar").classList.toggle("minimized");
-      document.getElementById("mapContainer").classList.toggle("minimized");
-    };
-
-    // Atualização automática a cada 60 segundos
-    setInterval(() => {
-      if (currentTab === 'localizacoes') showLocalizacoes();
-    }, 60000);
-
-    let currentTab = 'localizacoes';
-    showTab(currentTab);
+    window.addEventListener('load', initMap);
   </script>
 </body>
 </html>
