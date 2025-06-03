@@ -39,7 +39,15 @@
 
     /* Label acima do marcador */
     .marker-label-popup {
-      
+      font-weight: bold;
+      color: #333;
+      padding: 2px 6px;
+      background-color: white;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+      white-space: nowrap;
     }
 
     /* Popup estilizado */
@@ -96,10 +104,11 @@
       return `${pad(day)}/${pad(month + 1)}/${date.getFullYear()} ${pad(h12)}:${pad(minute)}:${pad(second)} ${ampm}`;
     }
 
-    /** Cria um ícone SVG no formato de alfinete (pin) colorido */
+    /** Cria um ícone SVG no formato de alfinete (pin) colorido e 2× tamanho */
     function createPinIcon(color) {
+      // SVG dimensionado para 50×82 px (2× 25×41)
       const svg = `
-        <svg width="25" height="41" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <svg width="38" height="75" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path fill="${color}" stroke="black" stroke-width="1" d="M12,2C8.13,2,5,5.13,5,9c0,5.25,7,13,7,13s7-7.75,7-13C19,5.13,15.87,2,12,2z"/>
           <circle fill="white" cx="12" cy="9" r="2.5"/>
         </svg>
@@ -107,9 +116,9 @@
       return L.divIcon({
         className: 'svg-pin-icon',
         html: svg,
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [0, -38]
+        iconSize: [50, 82],       // dimensão 2× (largura, altura)
+        iconAnchor: [25, 82],     // ancoragem no meio da base (metade de 50 = 25, altura = 82)
+        popupAnchor: [0, -74]     // posiciona o popup 74 px acima da base do pin (82 - 8)
       });
     }
 
@@ -147,18 +156,18 @@
             // Define cor com base no ESTADO
             let color = '#999'; // padrão
             const lower = ESTADO.toLowerCase();
-            if (lower === 'ativo') color = '#5A73D4FE';
-            else if (lower === 'inativo') color = '#F44336';
+            if (lower === 'ativo') color = '#5A73D4';   // azul
+            else if (lower === 'inativo') color = '#F44336'; // vermelho
 
-            // Cria e adiciona marcador SVG colorido
+            // Cria e adiciona marcador SVG colorido ampliado em 2×
             const pinIcon = createPinIcon(color);
             const marker = L.marker([LAT, LNG], { icon: pinIcon }).addTo(markersLayer);
 
             // Label permanente com o nome acima do marcador
-            marker.bindTooltip(`<div class="marker-label-popup">${NOME}</div>`, {
+            marker.bindTooltip(`<div>${NOME}</div>`, {
               permanent: true,
               direction: 'top',
-              offset: [0, -45],
+              offset: [-5, -65], // ajusta para a nova altura do pin (82) mais distância extra
               opacity: 0.9
             }).openTooltip();
 
