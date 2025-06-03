@@ -1,19 +1,26 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Mapa - Localizações</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <meta charset="UTF-8" />
+  <title>VigiOn – Localizar Equipe</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
   <style>
     /* ===========================
        Remove scrollbars e margens
        =========================== */
-    html, body {
+    html,
+    body {
       margin: 0;
       padding: 0;
       height: 100%;
-      overflow: hidden;
+      overflow: hidden; /* remove barras de rolagem externas */
     }
 
     /* Mapa ocupa toda a viewport */
@@ -25,17 +32,19 @@
       bottom: 0;
     }
 
-    /* Estilo da sidebar */
+    /* ======================
+       Sidebar (Menu lateral)
+       ====================== */
     .sidebar {
       position: absolute;
       top: 0;
       left: 0;
       width: 250px;
       height: 100%;
-      background: #494949;
+      background: #494949; /* tom escuro */
       padding: 1rem;
-      overflow-y: auto;   /* apenas a sidebar rola internamente */
-      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+      overflow-y: auto; /* apenas a sidebar rola */
+      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
       transition: transform 0.3s;
       z-index: 1001;
       color: white;
@@ -98,6 +107,32 @@
       background: #555;
     }
 
+    /* Container de busca (dentro da sidebar) */
+    #search-container {
+      margin: 0.5rem 0; /* espaço acima e abaixo */
+      display: flex;
+      gap: 4px;
+    }
+    #search-container input {
+      flex: 1;
+      padding: 4px;
+      border: 1px solid #ccc;
+      border-radius: 2px;
+      font-size: 0.9rem;
+    }
+    #search-container button {
+      padding: 4px 8px;
+      border: none;
+      background: #5A73D4;
+      color: white;
+      border-radius: 2px;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    #search-container button:hover {
+      background: #4a5bb5;
+    }
+
     /* Label acima do marcador */
     .marker-label-popup {
       font-weight: bold;
@@ -107,7 +142,7 @@
       border: 1px solid #ccc;
       border-radius: 4px;
       font-size: 13px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
       white-space: nowrap;
     }
 
@@ -117,61 +152,110 @@
     }
   </style>
 </head>
+
 <body>
   <!-- Botão para alternar a sidebar -->
   <button class="toggle-sidebar" onclick="toggleSidebar()">☰</button>
 
-  <!-- Menu lateral -->
+  <!-- Sidebar -->
   <div class="sidebar" id="sidebar">
-    <!-- Logo VigiOn embutida via data-URI SVG -->
-    <img 
+    <!-- Logo VigiOn embutida como data-URI -->
+    <img
       src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSJ3aGl0ZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIwIj5WaWdpT248L3RleHQ+PC9zdmc+"
-      alt="VigiOn Logo" 
+      alt="VigiOn Logo"
       class="logo"
-    >
+    />
     <h3>Funções</h3>
     <ul>
-      <li><button onclick="loadView('localizacoes')">Localizações</button></li>
-      <li><button onclick="loadView('historico')">Histórico</button></li>
-      <li><button onclick="loadView('rota')">Criar Rota</button></li>
+      <li>
+        <button onclick="loadView('localizar')" id="btn-localizar">
+          Localizar Equipe
+        </button>
+      </li>
+      <!-- Aqui será inserida a caixa de busca, logo abaixo de “Localizar Equipe” -->
+      <li id="search-placeholder"></li>
+
+      <li>
+        <button onclick="loadView('historico')">Histórico</button>
+      </li>
+      <li>
+        <button onclick="loadView('rota')">Criar Rota</button>
+      </li>
     </ul>
   </div>
 
-  <!-- Div do mapa Leaflet -->
+  <!-- Div onde o mapa será renderizado -->
   <div id="map"></div>
 
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <script>
     let map;
     let markersLayer;
+    let allMarkers = []; // armazena todos os marcadores atuais
 
     // IDs e URL da planilha Google Sheets
     const SHEET_ID = '1C8RlFUa9FEmiAUVrNYC7PTRUTGepkVXXwsND5Oo7C1Y';
     const SHEET_NAME = 'Localizações';
-    const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}`;
+    const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
+      SHEET_NAME
+    )}`;
 
     /** Alterna a visibilidade da sidebar */
     function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('minimized');
-      document.querySelector('.toggle-sidebar').style.left =
-        document.getElementById('sidebar').classList.contains('minimized') ? '10px' : '260px';
+      const sidebar = document.getElementById('sidebar');
+      const btn = document.querySelector('.toggle-sidebar');
+      sidebar.classList.toggle('minimized');
+      btn.style.left = sidebar.classList.contains('minimized')
+        ? '10px'
+        : '260px';
     }
 
-    /** Carrega visualização (placeholder) */
+    /** Troca de views: 'localizar', 'historico' ou 'rota' */
     function loadView(view) {
-      alert(`Carregando view: ${view}`);
+      // 1) Limpa a caixa de busca (se existir)
+      const placeholder = document.getElementById('search-placeholder');
+      placeholder.innerHTML = '';
+
+      // 2) **Não** removemos a camada markersLayer aqui, para não apagar marcadores
+
+      // 3) Decide qual view habilitar
+      if (view === 'localizar') {
+        showLocalizar();
+      } else if (view === 'historico') {
+        alert('Histórico ainda não implementado nesta etapa.');
+      } else if (view === 'rota') {
+        alert('Criar Rota ainda não implementado nesta etapa.');
+      }
+    }
+
+    /** Inicializa o mapa Leaflet e carrega marcadores */
+    function initMap() {
+      map = L.map('map', { zoomControl: false }).setView([-15.6, -56.1], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+      }).addTo(map);
+
+      markersLayer = L.layerGroup().addTo(map);
+      fetchData(); // carrega marcadores inicialmente
+      setInterval(fetchData, 60000); // atualiza a cada 60s
     }
 
     /** Formata data do Google Sheets (Date(a,b,c,d,e,f)) para dd/MM/yyyy hh:mm:ss AM/PM */
     function formatDateTime(serializedDate) {
-      const match = serializedDate.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+      const match = serializedDate.match(
+        /Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/
+      );
       if (!match) return serializedDate;
       const [_, year, month, day, hour, minute, second] = match.map(Number);
       const date = new Date(year, month, day, hour, minute, second);
-      const pad = n => n.toString().padStart(2, '0');
+      const pad = (n) => n.toString().padStart(2, '0');
       const h12 = date.getHours() % 12 || 12;
       const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
-      return `${pad(day)}/${pad(month + 1)}/${date.getFullYear()} ${pad(h12)}:${pad(minute)}:${pad(second)} ${ampm}`;
+      return `${pad(day)}/${pad(month + 1)}/${date.getFullYear()} ${pad(
+        h12
+      )}:${pad(minute)}:${pad(second)} ${ampm}`;
     }
 
     /**
@@ -190,65 +274,54 @@
         className: 'svg-pin-icon',
         html: svg,
         iconSize: [50, 82],
-        iconAnchor: [25, 78],  // alinhamento corrigido
-        popupAnchor: [0, -70]
+        iconAnchor: [25, 78], // alinhamento corrigido
+        popupAnchor: [0, -70],
       });
-    }
-
-    /** Inicializa o mapa Leaflet sem os controles de zoom nativos */
-    function initMap() {
-      map = L.map('map', { zoomControl: false }).setView([-15.6, -56.1], 12);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
-      markersLayer = L.layerGroup().addTo(map);
-      fetchData();
-      setInterval(fetchData, 60000); // Atualiza a cada 60 segundos
     }
 
     /** Busca dados na planilha e insere marcadores coloridos */
     function fetchData() {
       fetch(SHEET_URL)
-        .then(res => res.text())
-        .then(text => {
+        .then((res) => res.text())
+        .then((text) => {
           const json = JSON.parse(text.substring(47).slice(0, -2));
           const rows = json.table.rows;
           markersLayer.clearLayers();
+          allMarkers = [];
 
-          rows.forEach(row => {
-            const NOME      = row.c[1]?.v || '';
-            const DATAHORA  = row.c[2]?.v || '';
-            const LAT       = row.c[3]?.v || '';
-            const LNG       = row.c[4]?.v || '';
-            const ENDERECO  = row.c[5]?.v || '';
-            const ESTADO    = row.c[6]?.v || '';
+          rows.forEach((row) => {
+            const NOME = row.c[1]?.v || '';
+            const DATAHORA = row.c[2]?.v || '';
+            const LAT = row.c[3]?.v || '';
+            const LNG = row.c[4]?.v || '';
+            const ENDERECO = row.c[5]?.v || '';
+            const ESTADO = row.c[6]?.v || '';
             const PROTOCOLO = row.c[7]?.v || '';
-            const STATUS    = row.c[8]?.v || '';
-            const OBS       = row.c[9]?.v || '';
+            const STATUS = row.c[8]?.v || '';
+            const OBS = row.c[9]?.v || '';
 
             if (!LAT || !LNG) return;
 
-            // Define cor com base no ESTADO
             let color = '#999'; // padrão
             const lower = ESTADO.toLowerCase();
-            if (lower === 'ativo')       color = '#5A73D4';
+            if (lower === 'ativo') color = '#5A73D4';
             else if (lower === 'inativo') color = '#F44336';
 
-            // Cria e adiciona marcador SVG colorido
             const pinIcon = createPinIcon(color);
-            const marker  = L.marker([LAT, LNG], { icon: pinIcon })
-                             .addTo(markersLayer);
+            const marker = L.marker([LAT, LNG], { icon: pinIcon }).addTo(
+              markersLayer
+            );
 
-            // Label permanente com o nome acima do marcador
-            marker.bindTooltip(
-              `<div class="marker-label-popup">${NOME}</div>`,
-              {
+            // rotula com o nome
+            marker
+              .bindTooltip(`<div class="marker-label-popup">${NOME}</div>`, {
                 permanent: true,
                 direction: 'top',
                 offset: [0, -82],
-                opacity: 0.9
-              }
-            ).openTooltip();
+                opacity: 0.9,
+              })
+              .openTooltip();
 
-            // Popup de detalhes ao clicar
             marker.bindPopup(`
               <strong>Nome:</strong> ${NOME}<br>
               <strong>Data/Hora:</strong> ${formatDateTime(DATAHORA)}<br>
@@ -260,12 +333,83 @@
               <strong>Status:</strong> ${STATUS}<br>
               <strong>Observações:</strong> ${OBS}
             `);
+
+            // Armazena para busca por nome
+            allMarkers.push({ marker, nome: NOME });
           });
-        });
+        })
+        .catch((err) => console.error('Erro ao carregar dados:', err));
     }
 
-    // Ao carregar a página, inicia o mapa
-    window.addEventListener('load', initMap);
+    /** Exibe a interface de busca para “Localizar Equipe” dentro da sidebar */
+    function showLocalizar() {
+      // 1) Reexibe marcadores já carregados
+      map.addLayer(markersLayer);
+
+      // 2) Insere a caixa de busca logo abaixo de “Localizar Equipe”
+      const placeholder = document.getElementById('search-placeholder');
+      if (placeholder) {
+        // só cria se ainda não existir um #search-container
+        if (!document.getElementById('search-container')) {
+          placeholder.innerHTML = `
+            <div id="search-container">
+              <input type="text" id="search-input" placeholder="Nome ou lat,lon" />
+              <button id="btn-search">Buscar</button>
+            </div>
+          `;
+          // Ajusta foco para o input
+          document.getElementById('search-input').focus();
+
+          // Ao clicar em Buscar ou pressionar Enter, efetua a pesquisa
+          document.getElementById('btn-search').onclick = performSearch;
+          document
+            .getElementById('search-input')
+            .addEventListener('keyup', function (e) {
+              if (e.key === 'Enter') performSearch();
+            });
+        }
+      }
+    }
+
+    /** Realiza a busca por nome ou coordenadas e centraliza o mapa */
+    function performSearch() {
+      const val = document.getElementById('search-input').value.trim();
+      if (!val) return;
+
+      // Regex para "lat,lon"
+      const coordMatch = val.match(
+        /^\s*(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)\s*$/
+      );
+      if (coordMatch) {
+        const lat = parseFloat(coordMatch[1]);
+        const lon = parseFloat(coordMatch[3]);
+        map.setView([lat, lon], 15);
+        return;
+      }
+
+      // Caso contrário, busca por nome (case-insensitive, parcial)
+      const busca = val.toLowerCase();
+      let encontrado = false;
+      for (const entry of allMarkers) {
+        if (entry.nome.toLowerCase().includes(busca)) {
+          const m = entry.marker;
+          const latlng = m.getLatLng();
+          map.setView(latlng, 15);
+          m.openPopup();
+          encontrado = true;
+          break;
+        }
+      }
+      if (!encontrado) {
+        alert('Nenhum dispositivo encontrado com esse nome.');
+      }
+    }
+
+    // Ao carregar a página, inicia o mapa (sem abrir a caixa de busca)
+    window.addEventListener('load', () => {
+      initMap();
+      // inicialmente, NÃO abrimos a busca até o usuário clicar em “Localizar Equipe”
+    });
   </script>
 </body>
 </html>
