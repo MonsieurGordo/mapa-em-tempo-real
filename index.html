@@ -6,8 +6,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
+    /* ===========================
+       Remove scrollbars e margens
+       =========================== */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
     /* Mapa ocupa toda a viewport */
-    #map { height: 100vh; width: 100%; }
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
 
     /* Estilo da sidebar */
     .sidebar {
@@ -16,14 +32,17 @@
       left: 0;
       width: 250px;
       height: 100%;
-      background: #fff;
+      background: #494949;
       padding: 1rem;
-      overflow-y: auto;
+      overflow-y: auto;   /* apenas a sidebar rola internamente */
       box-shadow: 2px 0 5px rgba(0,0,0,0.1);
       transition: transform 0.3s;
       z-index: 1001;
+      color: white;
     }
-    .sidebar.minimized { transform: translateX(-100%); }
+    .sidebar.minimized {
+      transform: translateX(-100%);
+    }
 
     /* Botão que abre/fecha a sidebar */
     .toggle-sidebar {
@@ -31,10 +50,52 @@
       top: 10px;
       left: 260px;
       z-index: 1002;
-      background: #fff;
+      background: #494949;
       border: none;
       font-size: 18px;
+      color: white;
       cursor: pointer;
+      transition: left 0.3s;
+    }
+    .sidebar.minimized + .toggle-sidebar {
+      left: 10px;
+    }
+
+    /* Logo no topo da sidebar */
+    .sidebar .logo {
+      display: block;
+      margin: 0 auto 1rem;
+      width: 120px;
+      height: 40px;
+    }
+
+    /* Título da sidebar */
+    .sidebar h3 {
+      margin-top: 0;
+      margin-bottom: 1rem;
+      text-align: center;
+      font-size: 1.2rem;
+    }
+
+    /* Botões de função */
+    .sidebar ul {
+      list-style: none;
+      padding: 0;
+    }
+    .sidebar li {
+      margin: 0.5rem 0;
+    }
+    .sidebar button {
+      width: 100%;
+      padding: 0.5rem;
+      background: #666;
+      border: none;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .sidebar button:hover {
+      background: #555;
     }
 
     /* Label acima do marcador */
@@ -59,9 +120,16 @@
 <body>
   <!-- Botão para alternar a sidebar -->
   <button class="toggle-sidebar" onclick="toggleSidebar()">☰</button>
+
   <!-- Menu lateral -->
   <div class="sidebar" id="sidebar">
-    <h3>Menu</h3>
+    <!-- Logo VigiOn embutida via data-URI SVG -->
+    <img 
+      src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSJ3aGl0ZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIwIj5WaWdpT248L3RleHQ+PC9zdmc+"
+      alt="VigiOn Logo" 
+      class="logo"
+    >
+    <h3>Funções</h3>
     <ul>
       <li><button onclick="loadView('localizacoes')">Localizações</button></li>
       <li><button onclick="loadView('historico')">Histórico</button></li>
@@ -85,6 +153,8 @@
     /** Alterna a visibilidade da sidebar */
     function toggleSidebar() {
       document.getElementById('sidebar').classList.toggle('minimized');
+      document.querySelector('.toggle-sidebar').style.left =
+        document.getElementById('sidebar').classList.contains('minimized') ? '10px' : '260px';
     }
 
     /** Carrega visualização (placeholder) */
@@ -104,27 +174,30 @@
       return `${pad(day)}/${pad(month + 1)}/${date.getFullYear()} ${pad(h12)}:${pad(minute)}:${pad(second)} ${ampm}`;
     }
 
-    /** Cria um ícone SVG no formato de alfinete (pin) colorido e 2× tamanho */
+    /**
+     * Cria um ícone SVG no formato de alfinete (pin) colorido e 2× tamanho
+     */
     function createPinIcon(color) {
       // SVG dimensionado para 50×82 px (2× 25×41)
       const svg = `
-        <svg width="38" height="75" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path fill="${color}" stroke="black" stroke-width="1" d="M12,2C8.13,2,5,5.13,5,9c0,5.25,7,13,7,13s7-7.75,7-13C19,5.13,15.87,2,12,2z"/>
+        <svg width="50" height="82" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path fill="${color}" stroke="black" stroke-width="1"
+                d="M12,2C8.13,2,5,5.13,5,9c0,5.25,7,13,7,13s7-7.75,7-13C19,5.13,15.87,2,12,2z"/>
           <circle fill="white" cx="12" cy="9" r="2.5"/>
         </svg>
       `;
       return L.divIcon({
         className: 'svg-pin-icon',
         html: svg,
-        iconSize: [50, 82],       // dimensão 2× (largura, altura)
-        iconAnchor: [25, 82],     // ancoragem no meio da base (metade de 50 = 25, altura = 82)
-        popupAnchor: [0, -74]     // posiciona o popup 74 px acima da base do pin (82 - 8)
+        iconSize: [50, 82],
+        iconAnchor: [25, 78],  // alinhamento corrigido
+        popupAnchor: [0, -70]
       });
     }
 
-    /** Inicializa o mapa Leaflet */
+    /** Inicializa o mapa Leaflet sem os controles de zoom nativos */
     function initMap() {
-      map = L.map('map').setView([-15.6, -56.1], 12);
+      map = L.map('map', { zoomControl: false }).setView([-15.6, -56.1], 12);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
       markersLayer = L.layerGroup().addTo(map);
       fetchData();
@@ -141,35 +214,39 @@
           markersLayer.clearLayers();
 
           rows.forEach(row => {
-            const NOME = row.c[1]?.v || '';
-            const DATAHORA = row.c[2]?.v || '';
-            const LAT = row.c[3]?.v || '';
-            const LNG = row.c[4]?.v || '';
-            const ENDERECO = row.c[5]?.v || '';
-            const ESTADO = row.c[6]?.v || '';
+            const NOME      = row.c[1]?.v || '';
+            const DATAHORA  = row.c[2]?.v || '';
+            const LAT       = row.c[3]?.v || '';
+            const LNG       = row.c[4]?.v || '';
+            const ENDERECO  = row.c[5]?.v || '';
+            const ESTADO    = row.c[6]?.v || '';
             const PROTOCOLO = row.c[7]?.v || '';
-            const STATUS = row.c[8]?.v || '';
-            const OBS = row.c[9]?.v || '';
+            const STATUS    = row.c[8]?.v || '';
+            const OBS       = row.c[9]?.v || '';
 
             if (!LAT || !LNG) return;
 
             // Define cor com base no ESTADO
             let color = '#999'; // padrão
             const lower = ESTADO.toLowerCase();
-            if (lower === 'ativo') color = '#5A73D4';   // azul
-            else if (lower === 'inativo') color = '#F44336'; // vermelho
+            if (lower === 'ativo')       color = '#5A73D4';
+            else if (lower === 'inativo') color = '#F44336';
 
-            // Cria e adiciona marcador SVG colorido ampliado em 2×
+            // Cria e adiciona marcador SVG colorido
             const pinIcon = createPinIcon(color);
-            const marker = L.marker([LAT, LNG], { icon: pinIcon }).addTo(markersLayer);
+            const marker  = L.marker([LAT, LNG], { icon: pinIcon })
+                             .addTo(markersLayer);
 
             // Label permanente com o nome acima do marcador
-            marker.bindTooltip(`<div>${NOME}</div>`, {
-              permanent: true,
-              direction: 'top',
-              offset: [-5, -65], // ajusta para a nova altura do pin (82) mais distância extra
-              opacity: 0.9
-            }).openTooltip();
+            marker.bindTooltip(
+              `<div class="marker-label-popup">${NOME}</div>`,
+              {
+                permanent: true,
+                direction: 'top',
+                offset: [0, -82],
+                opacity: 0.9
+              }
+            ).openTooltip();
 
             // Popup de detalhes ao clicar
             marker.bindPopup(`
