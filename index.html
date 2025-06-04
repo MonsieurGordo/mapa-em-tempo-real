@@ -2,13 +2,13 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>VigiOn – Localizar Equipe & Histórico</title>
+  <title>VigiOn – Localizar Equipe, Histórico & Criar Rota</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-  <!-- jsPDF + AutoTable (ambas gratuitas, MIT License) -->
+  <!-- jsPDF + AutoTable (MIT License) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
@@ -17,12 +17,15 @@
       margin: 0;
       padding: 0;
       height: 100%;
-      overflow: hidden;
+      overflow: hidden; /* remove scroll externo */
     }
+
     #map {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
     }
+
+    /* Sidebar (Menu lateral) */
     .sidebar {
       position: absolute;
       top: 0; left: 0;
@@ -30,12 +33,14 @@
       background: #494949;
       padding: 1rem;
       overflow-y: auto;
-      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
       transition: transform 0.3s;
       z-index: 1001;
       color: white;
     }
-    .sidebar.minimized { transform: translateX(-100%); }
+    .sidebar.minimized {
+      transform: translateX(-100%);
+    }
     .toggle-sidebar {
       position: absolute;
       top: 10px; left: 260px;
@@ -47,7 +52,9 @@
       cursor: pointer;
       transition: left 0.3s;
     }
-    .sidebar.minimized + .toggle-sidebar { left: 10px; }
+    .sidebar.minimized + .toggle-sidebar {
+      left: 10px;
+    }
     .sidebar .logo {
       display: block;
       margin: 0 auto 1rem;
@@ -60,31 +67,50 @@
     .sidebar ul {
       list-style: none; padding: 0;
     }
-    .sidebar li { margin: 0.5rem 0; }
+    .sidebar li {
+      margin: 0.5rem 0;
+    }
     .sidebar button {
       width: 100%; padding: 0.5rem;
       background: #666; border: none;
       color: white; font-size: 1rem;
       cursor: pointer;
     }
-    .sidebar button:hover { background: #555; }
+    .sidebar button:hover {
+      background: #555;
+    }
+
+    /* “Localizar Equipe” busca – elementos empilhados, largura = 100% */
     #search-container {
       margin: 0.5rem 0;
-      display: flex; gap: 4px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
     #search-container input {
-      flex: 1; padding: 4px;
-      border: 1px solid #ccc; border-radius: 2px;
-      font-size: 0.9rem; width: 100%;
+      width: 100%;
+      padding: 4px;
+      border: 1px solid #ccc;
+      border-radius: 2px;
+      font-size: 0.9rem;
       box-sizing: border-box;
     }
     #search-container button {
-      padding: 4px 8px; border: none;
-      background: #5A73D4; color: white;
-      border-radius: 2px; font-size: 0.9rem;
-      cursor: pointer; width: 100px; flex-shrink: 0;
+      width: 100%;
+      padding: 6px;
+      border: none;
+      background: #5A73D4;
+      color: white;
+      border-radius: 2px;
+      font-size: 0.9rem;
+      cursor: pointer;
     }
-    #search-container button:hover { background: #4a5bb5; }
+    #search-container button:hover {
+      background: #4a5bb5;
+    }
+
+    /* “Histórico” filtros – empilhados, largura total */
     #historico-container {
       margin: 0.5rem 0;
       display: flex; flex-direction: column;
@@ -96,12 +122,41 @@
       font-size: 0.9rem; box-sizing: border-box;
     }
     #historico-container button {
+      width: 100%;
       padding: 6px; border: none;
       background: #5A73D4; color: white;
       border-radius: 2px; font-size: 0.9rem;
-      cursor: pointer; margin-top: 4px;
+      cursor: pointer;
     }
-    #historico-container button:hover { background: #4a5bb5; }
+    #historico-container button:hover {
+      background: #4a5bb5;
+    }
+
+    /* “Criar Rota” filtros – empilhados, largura total */
+    #rota-container {
+      margin: 0.5rem 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #rota-container input {
+      width: 100%;
+      padding: 4px;
+      border: 1px solid #ccc; border-radius: 2px;
+      font-size: 0.9rem; box-sizing: border-box;
+    }
+    #rota-container button {
+      width: 100%;
+      padding: 6px; border: none;
+      background: #5A73D4; color: white;
+      border-radius: 2px; font-size: 0.9rem;
+      cursor: pointer;
+    }
+    #rota-container button:hover {
+      background: #4a5bb5;
+    }
+
     .marker-label-popup {
       font-weight: bold; color: #333;
       padding: 2px 6px; background-color: white;
@@ -109,7 +164,9 @@
       font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
       white-space: nowrap;
     }
-    .leaflet-popup-content-wrapper { border-radius: 8px; }
+    .leaflet-popup-content-wrapper {
+      border-radius: 8px;
+    }
   </style>
 </head>
 
@@ -124,6 +181,7 @@
     />
     <h3>Funções</h3>
     <ul>
+      <!-- Localizar Equipe -->
       <li>
         <button onclick="loadView('localizar')" id="btn-localizar">
           Localizar Equipe
@@ -131,6 +189,7 @@
       </li>
       <li id="search-placeholder"></li>
 
+      <!-- Histórico -->
       <li>
         <button onclick="loadView('historico')" id="btn-historico">
           Histórico
@@ -138,9 +197,13 @@
       </li>
       <li id="historico-placeholder"></li>
 
+      <!-- Criar Rota -->
       <li>
-        <button onclick="loadView('rota')">Criar Rota</button>
+        <button onclick="loadView('rota')" id="btn-rota">
+          Criar Rota
+        </button>
       </li>
+      <li id="rota-placeholder"></li>
     </ul>
   </div>
 
@@ -160,6 +223,7 @@
     const SHEET_URL_LOCAL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME_LOCAL)}`;
     const SHEET_URL_HIST = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME_HIST)}`;
 
+    /** Alterna sidebar */
     function toggleSidebar() {
       const sidebar = document.getElementById('sidebar');
       const btn = document.querySelector('.toggle-sidebar');
@@ -167,27 +231,44 @@
       btn.style.left = sidebar.classList.contains('minimized') ? '10px' : '260px';
     }
 
+    /**
+     * Troca de “view”:
+     * – 'localizar': mostra Localizações + busca de nome/coords
+     * – 'historico': oculta Localizações + exibe filtros de Histórico
+     * – 'rota': oculta Localizações + Histórico + exibe filtros de Rota
+     */
     function loadView(view) {
+      // Limpa placeholders
       document.getElementById('search-placeholder').innerHTML = '';
       document.getElementById('historico-placeholder').innerHTML = '';
+      document.getElementById('rota-placeholder').innerHTML = '';
 
       if (view === 'localizar') {
+        // Remove marcadores de histórico
         historicoMarkers.forEach(m => map.removeLayer(m));
         historicoMarkers = [];
+        // Recarrega Localizações
         markersLayer.clearLayers();
         fetchLocalizacoes();
         showLocalizar();
 
       } else if (view === 'historico') {
+        // Remove marcadores de Localizações
         markersLayer.clearLayers();
         allMarkers = [];
         showHistorico();
 
       } else if (view === 'rota') {
-        alert('Função "Criar Rota" será implementada em breve.');
+        // Remove Localizações e Histórico
+        markersLayer.clearLayers();
+        allMarkers = [];
+        historicoMarkers.forEach(m => map.removeLayer(m));
+        historicoMarkers = [];
+        showRota();
       }
     }
 
+    /** Inicializa mapa com Leaflet sem controles nativos */
     function initMap() {
       map = L.map('map', { zoomControl: false }).setView([-15.6, -56.1], 12);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
@@ -196,6 +277,7 @@
       setInterval(fetchLocalizacoes, 60000);
     }
 
+    /** Converte “Date(YYYY,MM,DD,hh,mm,ss)” → JS Date */
     function parseSerializedDate(serializedDate) {
       const match = serializedDate.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
       if (!match) return null;
@@ -203,6 +285,7 @@
       return new Date(year, month, day, hour, minute, second);
     }
 
+    /** Formata JS Date para “dd/MM/yyyy hh:mm:ss AM/PM” */
     function formatDateTime(serializedDate) {
       const date = parseSerializedDate(serializedDate);
       if (!date) return serializedDate;
@@ -218,6 +301,7 @@
       return `${day}/${month}/${year} ${pad(h12)}:${mins}:${secs} ${ampm}`;
     }
 
+    /** Cria ícone tipo pin 2× tamanho */
     function createPinIcon(color) {
       const svg = `
         <svg width="50" height="82" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -235,6 +319,7 @@
       });
     }
 
+    /** Carrega todos os marcadores de “Localizações” */
     function fetchLocalizacoes() {
       fetch(SHEET_URL_LOCAL)
         .then(res => res.text())
@@ -284,33 +369,33 @@
               <strong>Observações:</strong> ${OBS}
             `);
 
-            allMarkers.push({ marker, nome: NOME });
+            allMarkers.push({ marker, nome: NOME, lat: LAT, lng: LNG, estado: ESTADO });
           });
         })
         .catch(err => console.error('Erro ao carregar Localizações:', err));
     }
 
+    /** Exibe UI de “Localizar Equipe” */
     function showLocalizar() {
       map.addLayer(markersLayer);
 
       const placeholder = document.getElementById('search-placeholder');
-      if (placeholder) {
-        if (!document.getElementById('search-container')) {
-          placeholder.innerHTML = `
-            <div id="search-container">
-              <input type="text" id="search-input" placeholder="Nome ou lat,lon" />
-              <button id="btn-search">Buscar</button>
-            </div>
-          `;
-          document.getElementById('search-input').focus();
-          document.getElementById('btn-search').onclick = performSearch;
-          document.getElementById('search-input').addEventListener('keyup', function (e) {
-            if (e.key === 'Enter') performSearch();
-          });
-        }
+      if (placeholder && !document.getElementById('search-container')) {
+        placeholder.innerHTML = `
+          <div id="search-container">
+            <input type="text" id="search-input" placeholder="Nome ou coordenadas" />
+            <button id="btn-search">Buscar</button>
+          </div>
+        `;
+        document.getElementById('search-input').focus();
+        document.getElementById('btn-search').onclick = performSearch;
+        document.getElementById('search-input').addEventListener('keyup', function (e) {
+          if (e.key === 'Enter') performSearch();
+        });
       }
     }
 
+    /** Pesquisa em Localizações por nome ou coordenadas */
     function performSearch() {
       const val = document.getElementById('search-input').value.trim();
       if (!val) return;
@@ -339,33 +424,29 @@
       }
     }
 
+    /** Exibe filtros de “Histórico” */
     function showHistorico() {
       const placeholder = document.getElementById('historico-placeholder');
-      if (placeholder) {
-        if (!document.getElementById('historico-container')) {
-          placeholder.innerHTML = `
-            <div id="historico-container">
-              <input type="text" id="hist-latlng" placeholder="Coordenadas" />
-              <input type="datetime-local" id="hist-date-start" placeholder="De:" />
-              <input type="datetime-local" id="hist-date-end" placeholder="Até:" />
-              <button id="btn-historico-buscar">Buscar</button>
-            </div>
-          `;
-          document.getElementById('hist-latlng').addEventListener('keyup', function (e) {
+      if (placeholder && !document.getElementById('historico-container')) {
+        placeholder.innerHTML = `
+          <div id="historico-container">
+            <input type="text" id="hist-latlng" placeholder="Coordenadas" />
+            <input type="datetime-local" id="hist-date-start" placeholder="De:" />
+            <input type="datetime-local" id="hist-date-end" placeholder="Até:" />
+            <button id="btn-historico-buscar">Buscar</button>
+          </div>
+        `;
+        ['hist-latlng','hist-date-start','hist-date-end'].forEach(id => {
+          document.getElementById(id).addEventListener('keyup', e => {
             if (e.key === 'Enter') performHistoricoSearch();
           });
-          document.getElementById('hist-date-start').addEventListener('keyup', function (e) {
-            if (e.key === 'Enter') performHistoricoSearch();
-          });
-          document.getElementById('hist-date-end').addEventListener('keyup', function (e) {
-            if (e.key === 'Enter') performHistoricoSearch();
-          });
-          document.getElementById('btn-historico-buscar').onclick = performHistoricoSearch;
-          document.getElementById('hist-latlng').focus();
-        }
+        });
+        document.getElementById('btn-historico-buscar').onclick = performHistoricoSearch;
+        document.getElementById('hist-latlng').focus();
       }
     }
 
+    /** Pesquisa em “Histórico” e exibe marcadores vermelhos */
     function performHistoricoSearch() {
       const latlngVal = document.getElementById('hist-latlng').value.trim();
       const startVal = document.getElementById('hist-date-start').value;
@@ -391,7 +472,6 @@
         return;
       }
 
-      // <-- CENTRALIZA O MAPA NA COORDENADA INFORMADA -->
       map.setView([latRef, lonRef], 15);
 
       markersLayer.clearLayers();
@@ -416,7 +496,6 @@
 
             const rowDate = parseSerializedDate(DATAHORA_RAW);
             if (!rowDate) return;
-
             if (rowDate < dateStart || rowDate > dateEnd) return;
 
             const dist = haversineDistance(latRef, lonRef, LAT, LNG);
@@ -447,6 +526,137 @@
         .catch(err => console.error('Erro ao carregar Histórico:', err));
     }
 
+    /** Exibe filtros de “Criar Rota” */
+    function showRota() {
+      const placeholder = document.getElementById('rota-placeholder');
+      if (placeholder && !document.getElementById('rota-container')) {
+        placeholder.innerHTML = `
+          <div id="rota-container">
+            <input type="text" id="rota-latlng" placeholder="Coordenadas" />
+            <button id="btn-rota-buscar">Buscar</button>
+          </div>
+        `;
+        document.getElementById('rota-latlng').addEventListener('keyup', e => {
+          if (e.key === 'Enter') performRotaSearch();
+        });
+        document.getElementById('btn-rota-buscar').onclick = performRotaSearch;
+        document.getElementById('rota-latlng').focus();
+      }
+      // Garante que sempre recarregue apenas marcadores “Ativo” antes do destaque
+      markersLayer.clearLayers();
+      fetchLocalizacoes();
+    }
+
+    /**
+     * Pesquisa para “Criar Rota”:
+     * – Usa somente marcadores com ESTADO = "Ativo" para calcular distância
+     * – Centraliza no valor informado
+     * – Destaca 1° mais próximo em verde (#8BC34A) e 2° em laranja (#FFC107)
+     */
+    function performRotaSearch() {
+      const latlngVal = document.getElementById('rota-latlng').value.trim();
+      if (!latlngVal) return;
+
+      const coordMatch = latlngVal.match(/^\s*(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)\s*$/);
+      if (!coordMatch) {
+        alert('Formato de coordenada inválido. Use "lat,lon".');
+        return;
+      }
+      const latRef = parseFloat(coordMatch[1]);
+      const lonRef = parseFloat(coordMatch[3]);
+
+      // 1) Centraliza no ponto informado
+      map.setView([latRef, lonRef], 15);
+
+      // 2) Busca apenas linhas “Ativo” da aba Localizações
+      fetch(SHEET_URL_LOCAL)
+        .then(res => res.text())
+        .then(text => {
+          const json = JSON.parse(text.substring(47).slice(0, -2));
+          const rows = json.table.rows;
+
+          // Filtra só “Ativo” e calcula distâncias
+          const distArr = [];
+          rows.forEach((row, idx) => {
+            const ESTADO = row.c[6]?.v || '';
+            if (String(ESTADO).toLowerCase() !== 'ativo') return;
+
+            const LAT = row.c[3]?.v;
+            const LNG = row.c[4]?.v;
+            if (LAT == null || LNG == null) return;
+
+            const d = haversineDistance(latRef, lonRef, LAT, LNG);
+            distArr.push({ idx, dist: d });
+          });
+
+          // Se não houver nenhum ativo, avisa e retorna
+          if (distArr.length === 0) {
+            alert('Não há técnicos ativos para a rota.');
+            return;
+          }
+
+          // Ordena por distância crescente
+          distArr.sort((a, b) => a.dist - b.dist);
+
+          const idx1 = distArr[0]?.idx;
+          const idx2 = distArr[1]?.idx;
+
+          // 3) Reconstrói TODOS marcadores (só linhas “Ativo”), marcando cores adequadas
+          markersLayer.clearLayers();
+          allMarkers = [];
+
+          rows.forEach((row, i) => {
+            const NOME      = row.c[1]?.v || '';
+            const DATAHORA  = row.c[2]?.v || '';
+            const LAT       = row.c[3]?.v;
+            const LNG       = row.c[4]?.v;
+            const ENDERECO  = row.c[5]?.v || '';
+            const ESTADO    = row.c[6]?.v || '';
+            const PROTOCOLO = row.c[7]?.v || '';
+            const STATUS    = row.c[8]?.v || '';
+            const OBS       = row.c[9]?.v || '';
+
+            if (LAT == null || LNG == null) return;
+            if (String(ESTADO).toLowerCase() !== 'ativo') return;
+
+            let color;
+            if (i === idx1) {
+              color = '#8BC34A';   // verde para o mais próximo
+            } else if (i === idx2) {
+              color = '#FFC107';   // laranja para o segundo
+            } else {
+              color = '#5A73D4';   // azul padrão para ativo
+            }
+
+            const pinIcon = createPinIcon(color);
+            const marker = L.marker([LAT, LNG], { icon: pinIcon }).addTo(markersLayer);
+
+            marker.bindTooltip(`<div class="marker-label-popup">${NOME}</div>`, {
+              permanent: true,
+              direction: 'top',
+              offset: [0, -82],
+              opacity: 0.9
+            }).openTooltip();
+
+            marker.bindPopup(`
+              <strong>Nome:</strong> ${NOME}<br>
+              <strong>Data/Hora:</strong> ${formatDateTime(DATAHORA)}<br>
+              <strong>Latitude:</strong> ${LAT}<br>
+              <strong>Longitude:</strong> ${LNG}<br>
+              <strong>Endereço:</strong> ${ENDERECO}<br>
+              <strong>Estado:</strong> ${ESTADO}<br>
+              <strong>Protocolo:</strong> ${PROTOCOLO}<br>
+              <strong>Status:</strong> ${STATUS}<br>
+              <strong>Observações:</strong> ${OBS}
+            `);
+
+            allMarkers.push({ marker, nome: NOME, lat: LAT, lng: LNG, estado: ESTADO });
+          });
+        })
+        .catch(err => console.error('Erro ao carregar Localizações para Rota:', err));
+    }
+
+    /** Calcula distância Haversine em km */
     function haversineDistance(lat1, lon1, lat2, lon2) {
       const toRad = x => (x * Math.PI) / 180;
       const dLat = toRad(lat2 - lat1);
@@ -458,9 +668,10 @@
           Math.sin(dLon / 2) *
           Math.sin(dLon / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return 6371 * c;
+      return 6371 * c; // Terra em km
     }
 
+    /** Gera PDF de Histórico via Ctrl+P */
     async function exportarPdfHistorico() {
       const latlngVal = document.getElementById('hist-latlng').value.trim();
       const startVal = document.getElementById('hist-date-start').value;
@@ -470,7 +681,6 @@
         alert('Para gerar PDF, preencha “Coordenadas”, “De:” e “Até:”.');
         return;
       }
-
       const coordMatch = latlngVal.match(/^\s*(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)\s*$/);
       if (!coordMatch) {
         alert('Formato de coordenada inválido.\nUse “lat,lon” (ex: -15.668,-56.041).');
@@ -478,7 +688,6 @@
       }
       const latRef = parseFloat(coordMatch[1]);
       const lonRef = parseFloat(coordMatch[3]);
-
       const dateStart = new Date(startVal);
       const dateEnd = new Date(endVal);
       if (isNaN(dateStart) || isNaN(dateEnd) || dateStart > dateEnd) {
@@ -510,12 +719,9 @@
         const PROTOCOLO = row.c[5]?.v || '';
 
         if (LAT == null || LNG == null || !DATAHORA_RAW) return;
-
         const rowDate = parseSerializedDate(DATAHORA_RAW);
         if (!rowDate) return;
-
         if (rowDate < dateStart || rowDate > dateEnd) return;
-
         const dist = haversineDistance(latRef, lonRef, LAT, LNG);
         if (dist > 1) return;
 
@@ -538,7 +744,6 @@
       try {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ unit: 'pt', format: 'letter' });
-
         doc.setFontSize(14);
         doc.text('Relatório de Histórico (VigiOn)', 40, 40);
 
@@ -564,17 +769,17 @@
         }${String(agora.getDate()).padStart(2, '0')}.pdf`;
 
         doc.save(nomeArquivo);
-
       } catch (err) {
         console.error('Erro ao gerar PDF:', err);
         alert('Falha ao criar PDF. Verifique o console.');
       }
     }
 
+    /** Intercepta Ctrl+P para gerar PDF de Histórico */
     window.addEventListener('keydown', function (e) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
         e.preventDefault();
-        if (document.getElementById('historico-container')) {
+        if (document.getElementById('hist-latlng')) {
           exportarPdfHistorico();
         } else {
           alert('Para gerar PDF, abra a aba “Histórico” e preencha os filtros.');
