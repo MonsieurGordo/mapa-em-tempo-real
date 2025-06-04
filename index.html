@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>VigiOn – Localizar Equipe & Histórico</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -137,7 +137,7 @@
       background: #4a5bb5;
     }
 
-    /* Container de filtros (Histórico), inputs com 100% de largura */
+    /* Container de filtros (Histórico), inputs e botão com 100% de largura */
     #historico-container {
       margin: 0.5rem 0; /* espaço acima e abaixo */
       display: flex;
@@ -151,6 +151,19 @@
       border-radius: 2px;
       font-size: 0.9rem;
       box-sizing: border-box;
+    }
+    #historico-container button {
+      padding: 6px;
+      border: none;
+      background: #5A73D4;
+      color: white;
+      border-radius: 2px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    #historico-container button:hover {
+      background: #4a5bb5;
     }
 
     /* Label acima do marcador */
@@ -203,11 +216,6 @@
       <li>
         <button onclick="loadView('rota')">Criar Rota</button>
       </li>
-
-      <!-- Exportar Histórico (PDF) -->
-      <li>
-        <button onclick="exportarPdfHistorico()">Exportar Histórico (PDF)</button>
-      </li>
     </ul>
   </div>
 
@@ -241,7 +249,7 @@
     /**
      * Troca de views:
      * ‒ 'localizar': mostra marcadores de Localizações + caixa de busca dentro da sidebar
-     * ‒ 'historico': oculta marcadores de Localizações, exibe filtros de Histórico + busca e marca histórico
+     * ‒ 'historico': oculta marcadores de Localizações, exibe filtros de Histórico e busca histórico
      * ‒ 'rota': (não implementado ainda)
      */
     function loadView(view) {
@@ -250,7 +258,7 @@
       document.getElementById('historico-placeholder').innerHTML = '';
 
       if (view === 'localizar') {
-        // 1) limpa marcadores de Histórico
+        // 1) Limpa marcadores de Histórico
         historicoMarkers.forEach(m => map.removeLayer(m));
         historicoMarkers = [];
 
@@ -266,7 +274,7 @@
         markersLayer.clearLayers();
         allMarkers = [];
 
-        // 2) exibe UI de filtros de Histórico
+        // 2) exibe UI de filtros de Histórico + botão Buscar
         showHistorico();
 
       } else if (view === 'rota') {
@@ -453,10 +461,10 @@
     }
 
     /**
-     * Mostra filtros de Histórico:
+     * Mostra filtros de Histórico (com botão “Buscar” abaixo):
      * – 1 campo: “Coordenadas” (texto)
      * – 2 campos: “De:” e “Até:” (datetime-local)
-     * Ao pressionar Enter em qualquer campo, dispara performHistoricoSearch()
+     * – 1 botão: “Buscar” para disparar performHistoricoSearch()
      */
     function showHistorico() {
       const placeholder = document.getElementById('historico-placeholder');
@@ -467,16 +475,20 @@
               <input type="text" id="hist-latlng" placeholder="Coordenadas" />
               <input type="datetime-local" id="hist-date-start" placeholder="De:" />
               <input type="datetime-local" id="hist-date-end" placeholder="Até:" />
+              <button id="btn-historico-buscar">Buscar</button>
             </div>
           `;
-
-          ['hist-latlng', 'hist-date-start', 'hist-date-end'].forEach((id) => {
-            document.getElementById(id).addEventListener('keyup', function (e) {
-              if (e.key === 'Enter') {
-                performHistoricoSearch();
-              }
-            });
+          document.getElementById('hist-latlng').addEventListener('keyup', function (e) {
+            if (e.key === 'Enter') performHistoricoSearch();
           });
+          document.getElementById('hist-date-start').addEventListener('keyup', function (e) {
+            if (e.key === 'Enter') performHistoricoSearch();
+          });
+          document.getElementById('hist-date-end').addEventListener('keyup', function (e) {
+            if (e.key === 'Enter') performHistoricoSearch();
+          });
+          document.getElementById('btn-historico-buscar').onclick = performHistoricoSearch;
+          document.getElementById('hist-latlng').focus();
         }
       }
     }
