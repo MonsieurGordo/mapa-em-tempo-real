@@ -1,22 +1,22 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <title>VigiOn – Localizar Equipe</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <title>VigiOn – Localizar Equipe & Histórico</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- jsPDF + AutoTable (ambas gratuitas, MIT License) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
   <style>
     /* ===========================
        Remove scrollbars e margens
        =========================== */
-    html,
-    body {
+    html, body {
       margin: 0;
       padding: 0;
       height: 100%;
@@ -86,7 +86,7 @@
       font-size: 1.2rem;
     }
 
-    /* Botões de função */
+    /* Botões de função (cada um com 100% de largura) */
     .sidebar ul {
       list-style: none;
       padding: 0;
@@ -107,7 +107,7 @@
       background: #555;
     }
 
-    /* Container de busca (dentro da sidebar) */
+    /* Container de busca (Localizar Equipe), inputs e botões com 100% de largura */
     #search-container {
       margin: 0.5rem 0; /* espaço acima e abaixo */
       display: flex;
@@ -119,6 +119,8 @@
       border: 1px solid #ccc;
       border-radius: 2px;
       font-size: 0.9rem;
+      width: 100%;
+      box-sizing: border-box;
     }
     #search-container button {
       padding: 4px 8px;
@@ -128,9 +130,27 @@
       border-radius: 2px;
       font-size: 0.9rem;
       cursor: pointer;
+      width: 100px;
+      flex-shrink: 0;
     }
     #search-container button:hover {
       background: #4a5bb5;
+    }
+
+    /* Container de filtros (Histórico), inputs com 100% de largura */
+    #historico-container {
+      margin: 0.5rem 0; /* espaço acima e abaixo */
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #historico-container input {
+      width: 100%;
+      padding: 4px;
+      border: 1px solid #ccc;
+      border-radius: 2px;
+      font-size: 0.9rem;
+      box-sizing: border-box;
     }
 
     /* Label acima do marcador */
@@ -167,19 +187,26 @@
     />
     <h3>Funções</h3>
     <ul>
+      <!-- Localizar Equipe -->
       <li>
-        <button onclick="loadView('localizar')" id="btn-localizar">
-          Localizar Equipe
-        </button>
+        <button onclick="loadView('localizar')" id="btn-localizar">Localizar Equipe</button>
       </li>
-      <!-- Aqui será inserida a caixa de busca, logo abaixo de “Localizar Equipe” -->
       <li id="search-placeholder"></li>
 
+      <!-- Histórico -->
       <li>
-        <button onclick="loadView('historico')">Histórico</button>
+        <button onclick="loadView('historico')" id="btn-historico">Histórico</button>
       </li>
+      <li id="historico-placeholder"></li>
+
+      <!-- Criar Rota -->
       <li>
         <button onclick="loadView('rota')">Criar Rota</button>
+      </li>
+
+      <!-- Exportar Histórico (PDF) -->
+      <li>
+        <button onclick="exportarPdfHistorico()">Exportar Histórico (PDF)</button>
       </li>
     </ul>
   </div>
@@ -193,76 +220,98 @@
   <script>
     let map;
     let markersLayer;
-    let allMarkers = []; // armazena todos os marcadores atuais
+    let allMarkers = [];       // mantém marcadores de Localizações
+    let historicoMarkers = []; // mantém marcadores de Histórico
 
-    // IDs e URL da planilha Google Sheets
+    // IDs e URLs das planilhas Google Sheets
     const SHEET_ID = '1C8RlFUa9FEmiAUVrNYC7PTRUTGepkVXXwsND5Oo7C1Y';
-    const SHEET_NAME = 'Localizações';
-    const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
-      SHEET_NAME
-    )}`;
+    const SHEET_NAME_LOCAL = 'Localizações';
+    const SHEET_NAME_HIST = 'Historico';
+    const SHEET_URL_LOCAL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME_LOCAL)}`;
+    const SHEET_URL_HIST = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME_HIST)}`;
 
     /** Alterna a visibilidade da sidebar */
     function toggleSidebar() {
       const sidebar = document.getElementById('sidebar');
       const btn = document.querySelector('.toggle-sidebar');
       sidebar.classList.toggle('minimized');
-      btn.style.left = sidebar.classList.contains('minimized')
-        ? '10px'
-        : '260px';
-    }
-
-    /** Troca de views: 'localizar', 'historico' ou 'rota' */
-    function loadView(view) {
-      // 1) Limpa a caixa de busca (se existir)
-      const placeholder = document.getElementById('search-placeholder');
-      placeholder.innerHTML = '';
-
-      // 2) **Não** removemos a camada markersLayer aqui, para não apagar marcadores
-
-      // 3) Decide qual view habilitar
-      if (view === 'localizar') {
-        showLocalizar();
-      } else if (view === 'historico') {
-        alert('Histórico ainda não implementado nesta etapa.');
-      } else if (view === 'rota') {
-        alert('Criar Rota ainda não implementado nesta etapa.');
-      }
-    }
-
-    /** Inicializa o mapa Leaflet e carrega marcadores */
-    function initMap() {
-      map = L.map('map', { zoomControl: false }).setView([-15.6, -56.1], 12);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18,
-      }).addTo(map);
-
-      markersLayer = L.layerGroup().addTo(map);
-      fetchData(); // carrega marcadores inicialmente
-      setInterval(fetchData, 60000); // atualiza a cada 60s
-    }
-
-    /** Formata data do Google Sheets (Date(a,b,c,d,e,f)) para dd/MM/yyyy hh:mm:ss AM/PM */
-    function formatDateTime(serializedDate) {
-      const match = serializedDate.match(
-        /Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/
-      );
-      if (!match) return serializedDate;
-      const [_, year, month, day, hour, minute, second] = match.map(Number);
-      const date = new Date(year, month, day, hour, minute, second);
-      const pad = (n) => n.toString().padStart(2, '0');
-      const h12 = date.getHours() % 12 || 12;
-      const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
-      return `${pad(day)}/${pad(month + 1)}/${date.getFullYear()} ${pad(
-        h12
-      )}:${pad(minute)}:${pad(second)} ${ampm}`;
+      btn.style.left = sidebar.classList.contains('minimized') ? '10px' : '260px';
     }
 
     /**
-     * Cria um ícone SVG no formato de alfinete (pin) colorido e 2× tamanho
+     * Troca de views:
+     * ‒ 'localizar': mostra marcadores de Localizações + caixa de busca dentro da sidebar
+     * ‒ 'historico': oculta marcadores de Localizações, exibe filtros de Histórico + busca e marca histórico
+     * ‒ 'rota': (não implementado ainda)
+     */
+    function loadView(view) {
+      // Limpa placeholders (buscas antigas)
+      document.getElementById('search-placeholder').innerHTML = '';
+      document.getElementById('historico-placeholder').innerHTML = '';
+
+      if (view === 'localizar') {
+        // 1) limpa marcadores de Histórico
+        historicoMarkers.forEach(m => map.removeLayer(m));
+        historicoMarkers = [];
+
+        // 2) (re)carrega dados de Localizações e exibe todos
+        markersLayer.clearLayers();
+        fetchLocalizacoes(); // popula markersLayer + allMarkers
+
+        // 3) exibe a caixa de busca de “Localizar Equipe”
+        showLocalizar();
+
+      } else if (view === 'historico') {
+        // 1) remove marcadores de Localizações
+        markersLayer.clearLayers();
+        allMarkers = [];
+
+        // 2) exibe UI de filtros de Histórico
+        showHistorico();
+
+      } else if (view === 'rota') {
+        alert('Função "Criar Rota" será implementada em breve.');
+      }
+    }
+
+    /** Inicializa o mapa Leaflet e carrega marcadores de Localizações */
+    function initMap() {
+      map = L.map('map', { zoomControl: false }).setView([-15.6, -56.1], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+      markersLayer = L.layerGroup().addTo(map);
+      fetchLocalizacoes(); // carrega marcadores de Localizações na inicialização
+      setInterval(fetchLocalizacoes, 60000); // atualiza a cada 60s
+    }
+
+    /** Converte string do tipo "Date(YYYY,MM,DD,hh,mm,ss)" para um objeto Date */
+    function parseSerializedDate(serializedDate) {
+      const match = serializedDate.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+      if (!match) return null;
+      const [_, year, month, day, hour, minute, second] = match.map(Number);
+      return new Date(year, month, day, hour, minute, second);
+    }
+
+    /** Formata Date para "dd/MM/yyyy hh:mm:ss AM/PM" */
+    function formatDateTime(serializedDate) {
+      const date = parseSerializedDate(serializedDate);
+      if (!date) return serializedDate;
+      const pad = n => n.toString().padStart(2, '0');
+      const day = pad(date.getDate());
+      const month = pad(date.getMonth() + 1);
+      const year = date.getFullYear();
+      const hrs24 = date.getHours();
+      const h12 = hrs24 % 12 || 12;
+      const ampm = hrs24 >= 12 ? 'PM' : 'AM';
+      const mins = pad(date.getMinutes());
+      const secs = pad(date.getSeconds());
+      return `${day}/${month}/${year} ${pad(h12)}:${mins}:${secs} ${ampm}`;
+    }
+
+    /**
+     * Cria ícone em formato de alfinete (pin) colorido 2× tamanho
+     * color: string hexadecimal (e.g. "#F44336")
      */
     function createPinIcon(color) {
-      // SVG dimensionado para 50×82 px (2× 25×41)
       const svg = `
         <svg width="50" height="82" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path fill="${color}" stroke="black" stroke-width="1"
@@ -274,53 +323,53 @@
         className: 'svg-pin-icon',
         html: svg,
         iconSize: [50, 82],
-        iconAnchor: [25, 78], // alinhamento corrigido
-        popupAnchor: [0, -70],
+        iconAnchor: [25, 78], // base do ícone
+        popupAnchor: [0, -70]
       });
     }
 
-    /** Busca dados na planilha e insere marcadores coloridos */
-    function fetchData() {
-      fetch(SHEET_URL)
-        .then((res) => res.text())
-        .then((text) => {
+    /**
+     * Busca os dados da aba "Localizações" e insere marcadores coloridos no mapa.
+     * ➔ Limpa markersLayer antes de popular.
+     * ➔ Gera allMarkers = [ { marker, nome } ] para buscas por nome.
+     */
+    function fetchLocalizacoes() {
+      fetch(SHEET_URL_LOCAL)
+        .then(res => res.text())
+        .then(text => {
           const json = JSON.parse(text.substring(47).slice(0, -2));
           const rows = json.table.rows;
           markersLayer.clearLayers();
           allMarkers = [];
 
-          rows.forEach((row) => {
-            const NOME = row.c[1]?.v || '';
-            const DATAHORA = row.c[2]?.v || '';
-            const LAT = row.c[3]?.v || '';
-            const LNG = row.c[4]?.v || '';
-            const ENDERECO = row.c[5]?.v || '';
-            const ESTADO = row.c[6]?.v || '';
+          rows.forEach(row => {
+            const NOME      = row.c[1]?.v || '';
+            const DATAHORA  = row.c[2]?.v || '';
+            const LAT       = row.c[3]?.v;
+            const LNG       = row.c[4]?.v;
+            const ENDERECO  = row.c[5]?.v || '';
+            const ESTADO    = row.c[6]?.v || '';
             const PROTOCOLO = row.c[7]?.v || '';
-            const STATUS = row.c[8]?.v || '';
-            const OBS = row.c[9]?.v || '';
+            const STATUS    = row.c[8]?.v || '';
+            const OBS       = row.c[9]?.v || '';
 
-            if (!LAT || !LNG) return;
+            if (LAT == null || LNG == null) return;
 
-            let color = '#999'; // padrão
-            const lower = ESTADO.toLowerCase();
+            // Cor do marcador: azul se "ativo", vermelho se "inativo"
+            let color = '#999';
+            const lower = String(ESTADO).toLowerCase();
             if (lower === 'ativo') color = '#5A73D4';
             else if (lower === 'inativo') color = '#F44336';
 
             const pinIcon = createPinIcon(color);
-            const marker = L.marker([LAT, LNG], { icon: pinIcon }).addTo(
-              markersLayer
-            );
+            const marker = L.marker([LAT, LNG], { icon: pinIcon }).addTo(markersLayer);
 
-            // rotula com o nome
-            marker
-              .bindTooltip(`<div class="marker-label-popup">${NOME}</div>`, {
-                permanent: true,
-                direction: 'top',
-                offset: [0, -82],
-                opacity: 0.9,
-              })
-              .openTooltip();
+            marker.bindTooltip(`<div class="marker-label-popup">${NOME}</div>`, {
+              permanent: true,
+              direction: 'top',
+              offset: [0, -82],
+              opacity: 0.9
+            }).openTooltip();
 
             marker.bindPopup(`
               <strong>Nome:</strong> ${NOME}<br>
@@ -334,22 +383,24 @@
               <strong>Observações:</strong> ${OBS}
             `);
 
-            // Armazena para busca por nome
             allMarkers.push({ marker, nome: NOME });
           });
         })
-        .catch((err) => console.error('Erro ao carregar dados:', err));
+        .catch(err => console.error('Erro ao carregar Localizações:', err));
     }
 
-    /** Exibe a interface de busca para “Localizar Equipe” dentro da sidebar */
+    /**
+     * Caso o usuário clique em “Localizar Equipe”:
+     * – Reexibe marcadores de Localizações
+     * – Insere caixa de busca (Nome ou lat,lon) na sidebar
+     */
     function showLocalizar() {
-      // 1) Reexibe marcadores já carregados
+      // 1) Reexibe marcadores de Localizações (markersLayer já populado)
       map.addLayer(markersLayer);
 
-      // 2) Insere a caixa de busca logo abaixo de “Localizar Equipe”
+      // 2) Insere a caixa de busca (logo abaixo de “Localizar Equipe”)
       const placeholder = document.getElementById('search-placeholder');
       if (placeholder) {
-        // só cria se ainda não existir um #search-container
         if (!document.getElementById('search-container')) {
           placeholder.innerHTML = `
             <div id="search-container">
@@ -357,29 +408,26 @@
               <button id="btn-search">Buscar</button>
             </div>
           `;
-          // Ajusta foco para o input
           document.getElementById('search-input').focus();
-
-          // Ao clicar em Buscar ou pressionar Enter, efetua a pesquisa
           document.getElementById('btn-search').onclick = performSearch;
-          document
-            .getElementById('search-input')
-            .addEventListener('keyup', function (e) {
-              if (e.key === 'Enter') performSearch();
-            });
+          document.getElementById('search-input').addEventListener('keyup', function (e) {
+            if (e.key === 'Enter') performSearch();
+          });
         }
       }
     }
 
-    /** Realiza a busca por nome ou coordenadas e centraliza o mapa */
+    /**
+     * Pesquisa em Localizações:
+     * – Se valor for “lat,lon”: centraliza mapa lá
+     * – Caso contrário, busca por nome (parcial ou total), centraliza e abre popup
+     */
     function performSearch() {
       const val = document.getElementById('search-input').value.trim();
       if (!val) return;
 
-      // Regex para "lat,lon"
-      const coordMatch = val.match(
-        /^\s*(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)\s*$/
-      );
+      // Regex para lat,lon
+      const coordMatch = val.match(/^\s*(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)\s*$/);
       if (coordMatch) {
         const lat = parseFloat(coordMatch[1]);
         const lon = parseFloat(coordMatch[3]);
@@ -387,14 +435,13 @@
         return;
       }
 
-      // Caso contrário, busca por nome (case-insensitive, parcial)
+      // Caso contrário, busca por nome
       const busca = val.toLowerCase();
       let encontrado = false;
       for (const entry of allMarkers) {
         if (entry.nome.toLowerCase().includes(busca)) {
           const m = entry.marker;
-          const latlng = m.getLatLng();
-          map.setView(latlng, 15);
+          map.setView(m.getLatLng(), 15);
           m.openPopup();
           encontrado = true;
           break;
@@ -405,10 +452,291 @@
       }
     }
 
-    // Ao carregar a página, inicia o mapa (sem abrir a caixa de busca)
+    /**
+     * Mostra filtros de Histórico:
+     * – 1 campo: “Coordenadas” (texto)
+     * – 2 campos: “De:” e “Até:” (datetime-local)
+     * Ao pressionar Enter em qualquer campo, dispara performHistoricoSearch()
+     */
+    function showHistorico() {
+      const placeholder = document.getElementById('historico-placeholder');
+      if (placeholder) {
+        if (!document.getElementById('historico-container')) {
+          placeholder.innerHTML = `
+            <div id="historico-container">
+              <input type="text" id="hist-latlng" placeholder="Coordenadas" />
+              <input type="datetime-local" id="hist-date-start" placeholder="De:" />
+              <input type="datetime-local" id="hist-date-end" placeholder="Até:" />
+            </div>
+          `;
+
+          ['hist-latlng', 'hist-date-start', 'hist-date-end'].forEach((id) => {
+            document.getElementById(id).addEventListener('keyup', function (e) {
+              if (e.key === 'Enter') {
+                performHistoricoSearch();
+              }
+            });
+          });
+        }
+      }
+    }
+
+    /**
+     * Função que realiza a pesquisa de Histórico e adiciona marcadores vermelhos:
+     * – Lê “lat,lon” + “De:” + “Até:”
+     * – Fetch na aba “Historico”, converte cada linha em Date, filtra por data e distância ≤ 1 km
+     * – Cria marcador vermelho (#F44336) para cada linha válida
+     */
+    function performHistoricoSearch() {
+      const latlngVal = document.getElementById('hist-latlng').value.trim();
+      const startVal = document.getElementById('hist-date-start').value;
+      const endVal = document.getElementById('hist-date-end').value;
+
+      if (!latlngVal || !startVal || !endVal) {
+        alert('Preencha Coordenadas e ambos os campos de data/hora.');
+        return;
+      }
+
+      // Converte coordenadas
+      const coordMatch = latlngVal.match(/^\s*(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)\s*$/);
+      if (!coordMatch) {
+        alert('Formato de coordenada inválido. Use "lat,lon".');
+        return;
+      }
+      const latRef = parseFloat(coordMatch[1]);
+      const lonRef = parseFloat(coordMatch[3]);
+
+      // Converte datas
+      const dateStart = new Date(startVal);
+      const dateEnd = new Date(endVal);
+      if (isNaN(dateStart) || isNaN(dateEnd) || dateStart > dateEnd) {
+        alert('Verifique as datas: “De” deve ser ≤ “Até”.');
+        return;
+      }
+
+      // 1) Limpa marcadores de Localizações e Histórico
+      markersLayer.clearLayers();
+      historicoMarkers.forEach((m) => map.removeLayer(m));
+      historicoMarkers = [];
+
+      // 2) Lê todas as linhas da aba “Historico”
+      fetch(SHEET_URL_HIST)
+        .then((res) => res.text())
+        .then((text) => {
+          const json = JSON.parse(text.substring(47).slice(0, -2));
+          const rows = json.table.rows;
+
+          rows.forEach((row) => {
+            const ID = row.c[0]?.v || '';
+            const NOME = row.c[1]?.v || '';
+            const DATAHORA_RAW = row.c[2]?.v;
+            const LAT = row.c[3]?.v;
+            const LNG = row.c[4]?.v;
+            const PROTOCOLO = row.c[5]?.v || '';
+
+            if (LAT == null || LNG == null || !DATAHORA_RAW) return;
+
+            // Converte DATAHORA em JS Date
+            const rowDate = parseSerializedDate(DATAHORA_RAW);
+            if (!rowDate) return;
+
+            // Filtra por data
+            if (rowDate < dateStart || rowDate > dateEnd) return;
+
+            // Filtra por distância ≤ 1 km
+            const dist = haversineDistance(latRef, lonRef, LAT, LNG);
+            if (dist > 1) return;
+
+            // Se válido, adiciona marcador vermelho (#F44336)
+            const pinIcon = createPinIcon('#F44336');
+            const histMarker = L.marker([LAT, LNG], { icon: pinIcon }).addTo(map);
+
+            histMarker.bindTooltip(`<div class="marker-label-popup">${NOME}</div>`, {
+              permanent: true,
+              direction: 'top',
+              offset: [0, -82],
+              opacity: 0.9
+            }).openTooltip();
+
+            histMarker.bindPopup(`
+              <strong>ID:</strong> ${ID}<br>
+              <strong>Nome:</strong> ${NOME}<br>
+              <strong>Data/Hora:</strong> ${formatDateTime(DATAHORA_RAW)}<br>
+              <strong>Latitude:</strong> ${LAT}<br>
+              <strong>Longitude:</strong> ${LNG}<br>
+              <strong>Protocolo:</strong> ${PROTOCOLO}
+            `);
+
+            historicoMarkers.push(histMarker);
+          });
+        })
+        .catch((err) => console.error('Erro ao carregar Histórico:', err));
+    }
+
+    /** Função Haversine para distância em km entre dois pontos */
+    function haversineDistance(lat1, lon1, lat2, lon2) {
+      const toRad = (x) => (x * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) *
+          Math.cos(toRad(lat2)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return 6371 * c; // Raio da Terra em km
+    }
+
+    /**
+     * exportarPdfHistorico()
+     * – Filtra exatamente as linhas de Histórico dentro dos filtros já preenchidos
+     * – Monta uma matriz de dados para o jsPDF AutoTable
+     * – Gera um PDF com somente as linhas válidas e dispara o download
+     */
+    async function exportarPdfHistorico() {
+      // 1) Lê valores dos filtros
+      const latlngVal = document.getElementById('hist-latlng').value.trim();
+      const startVal = document.getElementById('hist-date-start').value;
+      const endVal = document.getElementById('hist-date-end').value;
+
+      if (!latlngVal || !startVal || !endVal) {
+        alert('Para gerar PDF, preencha “Coordenadas”, “De:” e “Até:”.');
+        return;
+      }
+
+      // Converte coordenadas
+      const coordMatch = latlngVal.match(/^\s*(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)\s*$/);
+      if (!coordMatch) {
+        alert('Formato de coordenada inválido.\nUse “lat,lon” (ex: -15.668,-56.041).');
+        return;
+      }
+      const latRef = parseFloat(coordMatch[1]);
+      const lonRef = parseFloat(coordMatch[3]);
+
+      // Converte datas
+      const dateStart = new Date(startVal);
+      const dateEnd = new Date(endVal);
+      if (isNaN(dateStart) || isNaN(dateEnd) || dateStart > dateEnd) {
+        alert('Verifique as datas: “De” deve ser ≤ “Até”.');
+        return;
+      }
+
+      // 2) Faz fetch dos dados de Histórico
+      let rows;
+      try {
+        const res = await fetch(SHEET_URL_HIST);
+        const text = await res.text();
+        const json = JSON.parse(text.substring(47).slice(0, -2));
+        rows = json.table.rows;
+      } catch (err) {
+        console.error('Erro ao ler aba Histórico para PDF:', err);
+        alert('Falha ao buscar dados do Histórico. Conferir console.');
+        return;
+      }
+
+      // 3) Filtra as linhas e monta “dadosParaPdf”
+      const dadosParaPdf = [];
+      const cabecalho = ['ID', 'Nome/Equipe', 'Data/Hora', 'Latitude', 'Longitude', 'Protocolo'];
+
+      rows.forEach((row) => {
+        const ID = row.c[0]?.v || '';
+        const NOME = row.c[1]?.v || '';
+        const DATAHORA_RAW = row.c[2]?.v;
+        const LAT = row.c[3]?.v;
+        const LNG = row.c[4]?.v;
+        const PROTOCOLO = row.c[5]?.v || '';
+
+        if (LAT == null || LNG == null || !DATAHORA_RAW) return;
+
+        const rowDate = parseSerializedDate(DATAHORA_RAW);
+        if (!rowDate) return;
+
+        // Filtrar data
+        if (rowDate < dateStart || rowDate > dateEnd) return;
+
+        // Filtrar distância ≤ 1 km
+        const dist = haversineDistance(latRef, lonRef, LAT, LNG);
+        if (dist > 1) return;
+
+        // Se passou, adiciona ao array
+        const dhFormatada = formatDateTime(DATAHORA_RAW);
+        dadosParaPdf.push([
+          String(ID),
+          String(NOME),
+          dhFormatada,
+          String(LAT),
+          String(LNG),
+          String(PROTOCOLO)
+        ]);
+      });
+
+      if (dadosParaPdf.length === 0) {
+        alert('Nenhum registro encontrado dentro dos filtros para gerar o PDF.');
+        return;
+      }
+
+      // 4) Gera o PDF com jsPDF + AutoTable
+      try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+
+        // Cabeçalho
+        doc.setFontSize(14);
+        doc.text('Relatório de Histórico (VigiOn)', 40, 40);
+
+        // Tabela
+        doc.autoTable({
+          head: [cabecalho],
+          body: dadosParaPdf,
+          startY: 60,
+          styles: { fontSize: 10 },
+          headStyles: { fillColor: [90, 115, 212], textColor: 255 },
+          columnStyles: {
+            0: { cellWidth: 40 },   // ID
+            1: { cellWidth: 100 },  // Nome/Equipe
+            2: { cellWidth: 100 },  // Data/Hora
+            3: { cellWidth: 60 },   // Lat
+            4: { cellWidth: 60 },   // Lon
+            5: { cellWidth: 80 }    // Protocolo
+          }
+        });
+
+        // Nome do arquivo com data atual
+        const agora = new Date();
+        const nomeArquivo = `historico_${agora.getFullYear()}${
+          String(agora.getMonth() + 1).padStart(2, '0')
+        }${String(agora.getDate()).padStart(2, '0')}.pdf`;
+
+        doc.save(nomeArquivo);
+
+      } catch (err) {
+        console.error('Erro ao gerar PDF:', err);
+        alert('Falha ao criar PDF. Verifique o console.');
+      }
+    }
+
+    /**
+     * Sobrescreve o atalho Ctrl+P (print) dentro da página:
+     * – Detecta “Ctrl+P” ou “⌘+P” e impede o comportamento padrão
+     * – Se estivermos na view “Historico” (campo visível), chama exportarPdfHistorico()
+     */
+    window.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        // Só gera PDF se a área de filtros de Histórico estiver visível na sidebar
+        if (document.getElementById('historico-container')) {
+          exportarPdfHistorico();
+        } else {
+          alert('Para gerar PDF, abra a aba “Histórico” e preencha os filtros.');
+        }
+      }
+    });
+
+    // Ao carregar a página, inicia o mapa e exibe “Localizar Equipe” por padrão
     window.addEventListener('load', () => {
       initMap();
-      // inicialmente, NÃO abrimos a busca até o usuário clicar em “Localizar Equipe”
+      loadView('localizar');
     });
   </script>
 </body>
