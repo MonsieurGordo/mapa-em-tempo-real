@@ -342,11 +342,12 @@
 
             if (LAT == null || LNG == null) return;
 
-            let color = '#999';
+            let color = '#999'; // cor padrão
             const lower = String(ESTADO).toLowerCase();
-            if (lower === 'ativo') color = '#5A73D4';
-            else if (lower === 'inativo') color = '#F44336';
-
+            if      (lower === 'ativo')     color = '#5A73D4'; // Azul
+            else if (lower === 'atenção' || lower === 'atencao') color = '#FFC107'; // Laranja
+            else if (lower === 'crítico'  || lower === 'critico') color = '#F44336'; // Vermelho
+            else if (lower === 'inativo')  color = '#757575'; // Cinza
             const pinIcon = createPinIcon(color);
             const marker = L.marker([LAT, LNG], { icon: pinIcon }).addTo(markersLayer);
 
