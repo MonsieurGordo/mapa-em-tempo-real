@@ -1,2745 +1,323 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <title>VigiOn – Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Leaflet CSS para exibir o mapa -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
-  <!-- jsPDF + AutoTable (para geração de PDF) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-
-  <!-- Tailwind CSS para estilização e responsividade -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Fonte Poppins para consistência com a tela de login -->
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-  <style>
-    /* Estilos globais para o corpo e HTML */
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden; /* Remove barra de rolagem externa */
-      font-family: 'Poppins', sans-serif; /* Aplica a fonte Poppins */
-    }
-
-    /* Cores personalizadas (consistentes com o VigiOn) */
-    .custom-bg-primary { background-color: #6200EE; } /* Primária: Roxo */
-    .custom-bg-secondary { background-color: #5A73D4; } /* Secundária: Azul vibrante */
-    .custom-bg-dark-gray { background-color: #494949; } /* Cinza escuro para sidebar */
-    .custom-text-primary { color: #6200EE; }
-    .custom-text-secondary { color: #5A73D4; }
-
-    /* Estilo para o mapa Leaflet */
-    #map {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      z-index: 0; /* Garante que o mapa fique abaixo da sidebar */
-      width: 100%; /* Torna o mapa responsivo na largura */
-      height: 100%; /* Torna o mapa responsivo na altura */
-    }
-
-    /* Sidebar (Menu lateral) */
-    .sidebar {
-      position: absolute;
-      top: 0; left: 0;
-      width: 280px; /* Largura um pouco maior para melhor UI */
-      height: 100%;
-      background: #494949; /* Fundo cinza escuro */
-      padding: 1.5rem;
-      overflow-y: auto;
-      box-shadow: 2px 0 10px rgba(0,0,0,0.3);
-      transition: transform 0.3s ease-in-out; /* Transição más suave */
-      z-index: 1001; /* Fica acima do mapa */
-      color: white;
-      display: flex; /* Para centralizar conteúdo verticalmente */
-      flex-direction: column;
-    }
-    .sidebar.minimized {
-      transform: translateX(-100%); /* Esconde a sidebar */
-    }
-    
-    /* Botão de alternar sidebar */
-    .toggle-sidebar {
-      position: fixed; /* Fixado na tela */
-      top: 1rem; /* Margem do topo */
-      left: 295px; /* Posicionado fora da sidebar quando expandida */
-      z-index: 1002;
-      background: #6200EE; /* Cor primária para o botão */
-      border: none;
-      border-radius: 0.5rem; /* Cantos arredondados */
-      padding: 0.5rem 0.75rem;
-      font-size: 1.5rem; /* Ícone maior */
-      color: white;
-      cursor: pointer;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      transition: left 0.3s ease-in-out, background-color 0.2s ease;
-    }
-    .toggle-sidebar:hover {
-      background-color: #5A73D4; /* Cor secundária no hover */
-    }
-    .sidebar.minimized + .toggle-sidebar {
-      left: 1rem; /* Move para a esquerda quando minimizada */
-    }
-
-    /* Estilo para o logo dentro da sidebar */
-    .sidebar .logo {
-      display: block;
-      margin: 0 auto 1.5rem; /* Centraliza e adiciona margem inferior */
-      width: 150px; /* Logo um pouco maior */
-      height: 50px; /* Altura ajustada */
-      object-fit: contain; /* Garante que a imagem se ajuste sem cortar */
-      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); /* Sombra para o logo */
-      display: flex; /* Para centralizar o texto verticalmente */
-      align-items: center;
-      justify-content: center;
-      font-size: 1.8rem; /* Tamanho da fonte para o texto do logo */
-      font-weight: 700;
-      color: white; /* Cor do texto do logo */
-      text-shadow: 0 2px 4px rgba(0,0,0,0.2); /* Sombra para o texto do logo */
-    }
-    .sidebar h3 {
-      margin-top: 0; margin-bottom: 1.5rem;
-      text-align: center; font-size: 1.4rem;
-      color: #FFFFFF; /* Título em branco */
-      font-weight: 600;
-    }
-    .sidebar ul {
-      list-style: none; padding: 0; margin: 0;
-      flex-grow: 1; /* Permite que a lista ocupe espaço disponível */
-    }
-    .sidebar li {
-      margin-bottom: 0.75rem; /* Más espaço entre os itens */
-    }
-    .sidebar li:last-child {
-      margin-bottom: 0;
-    }
-    .sidebar button {
-      width: 100%; padding: 0.8rem; /* Más padding para botões */
-      background: #5A73D4; /* Cor secundária para botões de menu */
-      border: none;
-      color: white;
-      font-size: 1rem;
-      font-weight: 500;
-      cursor: pointer;
-      border-radius: 0.5rem; /* Cantos arredondados */
-      transition: background-color 0.2s ease, transform 0.1s ease;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    .sidebar button:hover {
-      background: #6200EE; /* Cor primária no hover */
-      transform: translateY(-1px);
-    }
-    .sidebar button:active {
-      transform: translateY(0);
-      box-shadow: none;
-    }
-    /* Estilo para botões ativos */
-    .sidebar button.active {
-      background: #6200EE; /* Cor primária para o botão ativo */
-      box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
-    }
-
-    /* Contêineres de busca/filtros - visibilidade controlada via JS */
-    #search-container, #historico-container, #rota-container {
-      margin-top: 1rem;
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem; /* Espaço entre elementos */
-      padding: 0.75rem;
-      background-color: rgba(255, 255, 255, 0.1); /* Fundo semi-transparente */
-      border-radius: 0.5rem;
-      box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
-      display: none; /* Escondido por padrão, JavaScript vai controlar */
-    }
-    #search-container input, #historico-container input, #rota-container input {
-      width: 100%;
-      padding: 0.6rem;
-      border: 1px solid rgba(255,255,255,0.3); /* Borda clara */
-      border-radius: 0.375rem; /* Cantos más arredondados */
-      font-size: 0.95rem;
-      box-sizing: border-box;
-      background-color: rgba(0,0,0,0.2); /* Fundo escuro */
-      color: white;
-    }
-    #search-container input::placeholder, #historico-container input::placeholder, #rota-container input::placeholder {
-      color: rgba(255,255,255,0.6); /* Placeholder más claro */
-    }
-    #search-container input:focus, #historico-container input:focus, #rota-container input:focus {
-      outline: none;
-      border-color: #6200EE; /* Borda primária no foco */
-      box-shadow: 0 0 0 2px rgba(98, 0, 238, 0.4);
-    }
-    #search-container button, #historico-container button, #rota-container button {
-      width: 100%;
-      padding: 0.75rem;
-      border: none;
-      background: #6200EE; /* Botões de ação com cor primária */
-      color: white;
-      border-radius: 0.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background-color 0.2s ease, transform 0.1s ease;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    #search-container button:hover, #historico-container button:hover, #rota-container button:hover {
-      background: #5A73D4; /* Cor secundária no hover */
-      transform: translateY(-1px);
-    }
-    #search-container button:active, #historico-container button:active, #rota-container button:active {
-      transform: translateY(0);
-      box-shadow: none;
-    }
-
-    /* Estilo para o pop-up de marcador no mapa (apenas para estética, sem funcionalidade de mapa ainda) */
-    .marker-label-popup {
-      font-weight: bold;
-      color: #333;
-      padding: 4px 8px; /* Más padding */
-      background-color: white;
-      border: 1px solid #ccc;
-      border-radius: 6px; /* Cantos más arredondados */
-      font-size: 14px; /* Fonte um pouco maior */
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2); /* Sombra más suave */
-      white-space: nowrap;
-    }
-    .leaflet-popup-content-wrapper {
-      border-radius: 8px; /* Cantos arredondados do pop-up */
-    }
-
-    /* Estilos para o Modal de Mensagens (replicado do login para consistência, sem funcionalidade ainda) */
-    .message-modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.6); /* Fundo más escuro */
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 2000; /* Acima de tudo */
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.3s ease, visibility 0.3s ease;
-    }
-    .message-modal-overlay.show {
-        opacity: 1;
-        visibility: visible;
-    }
-    .message-modal-content {
-        background-color: white;
-        padding: 2rem;
-        border-radius: 0.75rem; /* Más arredondado */
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); /* Sombra más pronunciada */
-        text-align: center;
-        max-width: 450px; /* Um pouco maior */
-        width: 90%;
-        transform: translateY(-30px); /* Efeito de entrada */
-        opacity: 0;
-        transition: transform 0.3s ease, opacity 0.3s ease;
-    }
-    .message-modal-overlay.show .message-modal-content {
-        transform: translateY(0);
-        opacity: 1;
-    }
-    .message-modal-content h3 {
-        color: #333; /* Cor escura para o título */
-    }
-    .message-modal-content p {
-        color: #555; /* Cor más suave para o texto */
-    }
-    .message-modal-content button {
-        background-color: #6200EE; /* Botão OK com cor primária */
-        color: white;
-        padding: 0.75rem 1.5rem; /* Padding maior */
-        border-radius: 0.5rem;
-        font-weight: 600;
-        transition: background-color 0.2s ease;
-    }
-    .message-modal-content button:hover {
-        background-color: #5A73D4; /* Cor secundária no hover */
-    }
-
-    /* Estilos para o novo Modal de Edição de Perfil */
-    .profile-modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.6);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 2000;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.3s ease, visibility 0.3s ease;
-    }
-    .profile-modal-overlay.show {
-        opacity: 1;
-        visibility: visible;
-    }
-    .profile-modal-content {
-        background-color: white;
-        padding: 2rem;
-        border-radius: 0.75rem;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-        text-align: left; /* Alinha o texto à esquerda */
-        max-width: 500px; /* Um pouco maior para os campos */
-        width: 90%;
-        transform: translateY(-30px);
-        opacity: 0;
-        transition: transform 0.3s ease, opacity 0.3s ease;
-        display: flex; /* Permite layout flexível interno */
-        flex-direction: column;
-        gap: 1rem; /* Espaçamento entre os elementos do modal */
-    }
-    .profile-modal-overlay.show .profile-modal-content {
-        transform: translateY(0);
-        opacity: 1;
-    }
-    .profile-modal-content h3 {
-        color: #333;
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin-bottom: 1rem;
-        text-align: center; /* Centraliza o título */
-    }
-    .profile-modal-content label {
-        display: block;
-        font-weight: 500;
-        color: #4A5568;
-        margin-bottom: 0.25rem;
-    }
-    .profile-modal-content input {
-        width: 100%;
-        padding: 0.75rem;
-        border: 1px solid #CBD5E0;
-        border-radius: 0.5rem;
-        font-size: 1rem;
-        box-sizing: border-box;
-        margin-bottom: 1rem; /* Espaço após cada input */
-    }
-    .profile-modal-content input:focus {
-        outline: none;
-        border-color: #6200EE;
-        box-shadow: 0 0 0 3px rgba(98, 0, 238, 0.2);
-    }
-    .profile-modal-buttons {
-        display: flex;
-        justify-content: flex-end; /* Alinha botões à direita */
-        gap: 0.75rem; /* Espaçamento entre botões */
-        margin-top: 1rem;
-    }
-    .profile-modal-buttons button {
-        padding: 0.75rem 1.5rem;
-        border-radius: 0.5rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background-color 0.2s ease, transform 0.1s ease;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    .profile-modal-buttons button.cancel-btn {
-        background-color: #E2E8F0; /* Cor cinza claro */
-        color: #2D3748; /* Texto escuro */
-    }
-    .profile-modal-buttons button.cancel-btn:hover {
-        background-color: #CBD5E0;
-    }
-    .profile-modal-buttons button.update-btn {
-        background-color: #6200EE; /* Cor primária */
-        color: white;
-    }
-    .profile-modal-buttons button.update-btn:hover {
-        background-color: #5A73D4;
-    }
-
-    /* Estilos para o novo Modal de Configurações do Mapa */
-    .settings-modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.6);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 2000;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.3s ease, visibility 0.3s ease;
-    }
-    .settings-modal-overlay.show {
-        opacity: 1;
-        visibility: visible;
-    }
-    .settings-modal-content {
-        background-color: white;
-        padding: 2rem;
-        border-radius: 0.75rem;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-        text-align: left;
-        max-width: 400px;
-        width: 90%;
-        transform: translateY(-30px);
-        opacity: 0;
-        transition: transform 0.3s ease, opacity 0.3s ease;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-    .settings-modal-overlay.show .settings-modal-content {
-        transform: translateY(0);
-        opacity: 1;
-    }
-    .settings-modal-content h3 {
-        color: #333;
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin-bottom: 1rem;
-        text-align: center;
-    }
-    .settings-modal-content .radio-group label {
-        display: flex;
-        align-items: center;
-        margin-bottom: 0.5rem;
-        cursor: pointer;
-        font-weight: 400;
-        color: #4A5568;
-    }
-    .settings-modal-content .radio-group input[type="radio"] {
-        margin-right: 0.75rem;
-        accent-color: #6200EE;
-        transform: scale(1.2); /* Aumenta um pouco o tamanho do radio button */
-    }
-    .settings-modal-content button {
-        padding: 0.75rem 1.5rem;
-        border-radius: 0.5rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        width: 100%;
-        background-color: #6200EE;
-        color: white;
-        margin-top: 1rem;
-    }
-    .settings-modal-content button:hover {
-        background-color: #5A73D4;
-    }
-
-    /* Estilos para o Modal de Atalhos */
-    .shortcuts-modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.6);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 2000;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.3s ease, visibility 0.3s ease;
-    }
-    .shortcuts-modal-overlay.show {
-        opacity: 1;
-        visibility: visible;
-    }
-    .shortcuts-modal-content {
-        background-color: white;
-        padding: 2rem;
-        border-radius: 0.75rem;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-        text-align: left;
-        max-width: 500px;
-        width: 90%;
-        transform: translateY(-30px);
-        opacity: 0;
-        transition: transform 0.3s ease, opacity 0.3s ease;
-    }
-    .shortcuts-modal-overlay.show .shortcuts-modal-content {
-        transform: translateY(0);
-        opacity: 1;
-    }
-    .shortcuts-modal-content h3 {
-        color: #333;
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin-bottom: 1.5rem;
-        text-align: center;
-    }
-    .shortcuts-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-    .shortcuts-list li {
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: flex-start;
-        gap: 1rem;
-    }
-    .shortcuts-list .shortcut-key {
-        font-weight: 600;
-        color: #6200EE;
-        background-color: #F3F4F6;
-        padding: 0.4rem 0.8rem;
-        border-radius: 0.375rem;
-        white-space: nowrap;
-        min-width: 120px; /* Garante largura mínima para as teclas */
-        text-align: center;
-    }
-    .shortcuts-list .shortcut-description {
-        color: #4A5568;
-        font-size: 0.95rem;
-        flex-grow: 1;
-    }
-    .shortcuts-modal-content button {
-        margin-top: 2rem;
-        padding: 0.75rem 1.5rem;
-        border-radius: 0.5rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        width: 100%;
-        background-color: #6200EE;
-        color: white;
-    }
-    .shortcuts-modal-content button:hover {
-        background-color: #5A73D4;
-    }
-
-    /* Estilos para o Modal de Cadastros */
-    .cadastros-modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.6);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 2000;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.3s ease, visibility 0.3s ease;
-    }
-    .cadastros-modal-overlay.show {
-        opacity: 1;
-        visibility: visible;
-    }
-    .cadastros-modal-content {
-        background-color: white;
-        padding: 1.5rem; /* Um pouco menos de padding total */
-        border-radius: 0.75rem;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-        max-width: 90%; /* Más largo para a tabela */
-        width: 1000px; /* Largura fixa para telas maiores */
-        height: 90%; /* Altura fixa para o modal */
-        display: flex;
-        flex-direction: column;
-        transform: translateY(-30px);
-        opacity: 0;
-        transition: transform 0.3s ease, opacity 0.3s ease;
-    }
-    .cadastros-modal-overlay.show .cadastros-modal-content {
-        transform: translateY(0);
-        opacity: 1;
-    }
-    .cadastros-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background-color: #5A73D4; /* Cor secundária para o cabeçalho */
-        color: white;
-        padding: 1rem 1.5rem;
-        margin: -1.5rem -1.5rem 1.5rem -1.5rem; /* Ajusta margem para cobrir o padding do modal */
-        border-top-left-radius: 0.75rem;
-        border-top-right-radius: 0.75rem;
-    }
-    .cadastros-header h3 {
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin: 0;
-    }
-    .cadastros-header button {
-        background-color: #6200EE; /* Cor primária para o botão Adicionar */
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 0.5rem;
-        font-weight: 500;
-        transition: background-color 0.2s ease;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    .cadastros-header button:hover {
-        background-color: #5A73D4;
-    }
-    .cadastros-tabs {
-        display: flex;
-        margin-bottom: 1rem;
-        border-bottom: 1px solid #E2E8F0;
-    }
-    .cadastros-tab-button {
-        padding: 0.75rem 1.25rem;
-        background-color: transparent;
-        border: none;
-        font-size: 1rem;
-        font-weight: 500;
-        color: #718096;
-        cursor: pointer;
-        transition: color 0.2s ease, border-bottom 0.2s ease;
-        border-bottom: 2px solid transparent;
-    }
-    .cadastros-tab-button.active {
-        color: #6200EE;
-        border-bottom: 2px solid #6200EE;
-        font-weight: 600;
-    }
-    .cadastros-tab-button:hover:not(.active) {
-        color: #4A5568;
-    }
-    .cadastros-filters {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 1rem;
-        align-items: center;
-    }
-    .cadastros-filters input {
-        flex-grow: 1;
-        padding: 0.6rem 1rem;
-        border: 1px solid #CBD5E0;
-        border-radius: 0.5rem;
-        font-size: 0.95rem;
-    }
-    .cadastros-filters select {
-        padding: 0.6rem 1rem;
-        border: 1px solid #CBD5E0;
-        border-radius: 0.5rem;
-        font-size: 0.95rem;
-        background-color: white;
-    }
-    .cadastros-table-container {
-        flex-grow: 1;
-        overflow-y: auto; /* Permite rolagem na tabela se o conteúdo for grande */
-        border: 1px solid #E2E8F0;
-        border-radius: 0.5rem;
-        margin-bottom: 1rem;
-    }
-    .cadastros-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.9rem;
-    }
-    .cadastros-table th, .cadastros-table td {
-        padding: 0.75rem 1rem;
-        text-align: left;
-        border-bottom: 1px solid #E2E8F0;
-    }
-    .cadastros-table th {
-        background-color: #F7FAFC;
-        font-weight: 600;
-        color: #4A5568;
-        position: sticky;
-        top: 0;
-        z-index: 1;
-    }
-    .cadastros-table tbody tr:hover {
-        background-color: #F0F4F8;
-    }
-    .cadastros-table .user-avatar {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background-color: #A0AEC0; /* Cor de fundo para o ícone */
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 1rem;
-        margin-right: 0.5rem;
-    }
-    .cadastros-table .status-badge {
-        padding: 0.25rem 0.75rem;
-        border-radius: 9999px; /* Full rounded */
-        font-size: 0.8rem;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-    .status-badge.ativo { background-color: #D1FAE5; color: #065F46; } /* Verde */
-    .status-badge.inativo { background-color: #FEE2E2; color: #991B1B; } /* Vermelho */
-    .status-badge.bloqueado { background-color: #FEEBC8; color: #975A16; } /* Laranja */
-    .cadastros-table .action-buttons button {
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 0.4rem;
-        border-radius: 0.375rem;
-        transition: background-color 0.2s ease;
-    }
-    .cadastros-table .action-buttons button:hover {
-        background-color: #E2E8F0;
-    }
-    .cadastros-table .action-buttons svg {
-        width: 18px;
-        height: 18px;
-        color: #718096;
-    }
-    .cadastros-pagination {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 0.9rem;
-        color: #718096;
-    }
-    .cadastros-pagination-buttons button {
-        background-color: #F7FAFC;
-        border: 1px solid #E2E8F0;
-        padding: 0.5rem 0.8rem;
-        border-radius: 0.5rem;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-        margin: 0 0.2rem;
-    }
-    .cadastros-pagination-buttons button.active {
-        background-color: #6200EE;
-        color: white;
-        border-color: #6200EE;
-    }
-    .cadastros-pagination-buttons button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    /* Estilo para o botão de fechar modal (AGORA NO RODAPÉ) */
-    .cadastros-modal-footer {
-        display: flex;
-        justify-content: flex-end; /* Pushes content to the right */
-        padding-top: 1rem; /* Space from content above */
-        border-top: 1px solid #E2E8F0; /* Optional: a separator line */
-        margin-top: auto; /* Pushes the footer to the bottom if parent is flex column */
-        align-items: center; /* Vertically align items in the footer */
-    }
-    .cadastros-modal-footer .close-modal-button {
-        background-color: #F44336; /* Red color for exit button */
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 0.5rem;
-        font-size: 1rem; /* Smaller font size for a button */
-        font-weight: 500;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        /* Remove absolute positioning */
-        position: static; /* Ensure it's not absolutely positioned */
-        top: auto;
-        right: auto;
-        display: flex; /* Para alinhar o ícone e o texto */
-        align-items: center;
-        gap: 0.25rem; /* Espaço entre ícone e texto */
-    }
-    .cadastros-modal-footer .close-modal-button:hover {
-        background-color: #D32F2F; /* Darker red on hover */
-    }
-    .cadastros-modal-footer .close-modal-button svg {
-        width: 20px; /* Ajusta o tamanho do ícone */
-        height: 20px;
-        color: white; /* Cor do ícone */
-    }
-
-    /* Media Queries para responsividade do modal de cadastros */
-    @media (max-width: 768px) {
-        .cadastros-modal-content {
-            padding: 1rem;
-            max-width: 95%;
-            width: auto; /* Permite que a largura se ajuste */
-            height: 95%;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VigiOn - Login</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Poppins -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(to right, #6200EE, #5A73D4); /* Gradiente roxo para azul */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Evita rolagem */
         }
-        .cadastros-header {
-            padding: 0.8rem 1rem;
-            margin: -1rem -1rem 1rem -1rem;
+        .login-container {
+            background-color: white;
+            padding: 2.5rem; /* Aumentado o padding */
+            border-radius: 1rem; /* Mais arredondado */
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2); /* Sombra mais forte */
+            text-align: center;
+            max-width: 420px; /* Largura um pouco maior */
+            width: 90%;
+            animation: fadeIn 0.8s ease-out;
         }
-        .cadastros-header h3 {
-            font-size: 1.2rem;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .cadastros-header button {
-            padding: 0.4rem 0.8rem;
+        .logo {
+            width: 150px; /* Logo um pouco maior */
+            height: auto;
+            margin-bottom: 1.5rem; /* Mais espaço */
+        }
+        .input-field {
+            width: 100%;
+            padding: 0.8rem 1rem; /* Mais padding */
+            margin-bottom: 1rem;
+            border: 1px solid #CBD5E0; /* Cor de borda mais suave */
+            border-radius: 0.5rem; /* Mais arredondado */
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            box-sizing: border-box; /* Garante que padding não adicione à largura total */
+        }
+        .input-field:focus {
+            outline: none;
+            border-color: #6200EE; /* Cor primária no foco */
+            box-shadow: 0 0 0 3px rgba(98, 0, 238, 0.2); /* Sombra de foco */
+        }
+        .login-button {
+            width: 100%;
+            padding: 0.9rem; /* Mais padding */
+            background-color: #6200EE; /* Cor primária */
+            color: white;
+            border: none;
+            border-radius: 0.5rem; /* Mais arredondado */
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 10px rgba(98, 0, 238, 0.2);
+        }
+        .login-button:hover {
+            background-color: #5A73D4; /* Cor secundária no hover */
+            transform: translateY(-2px);
+        }
+        .login-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 5px rgba(98, 0, 238, 0.2);
+        }
+        .remember-me {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            color: #4A5568; /* Cor de texto mais escura */
             font-size: 0.9rem;
         }
-        .cadastros-filters {
-            flex-direction: column;
-            gap: 0.5rem;
+        .remember-me input {
+            margin-right: 0.5rem;
+            accent-color: #6200EE; /* Cor primária para o checkbox */
         }
-        .cadastros-filters input, .cadastros-filters select {
+        .message-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6); /* Fundo mais escuro */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
         }
-        .cadastros-table th, .cadastros-table td {
-            padding: 0.5rem 0.8rem;
+        .message-modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .message-modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.75rem; /* Mais arredondado */
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); /* Sombra mais pronunciada */
+            text-align: center;
+            max-width: 450px; /* Um pouco maior */
+            width: 90%;
+            transform: translateY(-30px); /* Efeito de entrada */
+            opacity: 0;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        .message-modal-overlay.show .message-modal-content {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .message-modal-content h3 {
+            color: #333; /* Cor escura para o título */
+        }
+        .message-modal-content p {
+            color: #555; /* Cor mais suave para o texto */
+        }
+        .message-modal-content button {
+            background-color: #6200EE; /* Botão OK com cor primária */
+            color: white;
+            padding: 0.75rem 1.5rem; /* Padding maior */
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: background-color 0.2s ease;
+        }
+        .message-modal-content button:hover {
+            background-color: #5A73D4; /* Cor secundária no hover */
+        }
+        .footer-text {
+            color: #A0AEC0; /* Cor mais clara para o rodapé */
             font-size: 0.8rem;
+            margin-top: 1.5rem;
         }
-        .cadastros-table .user-avatar {
-            width: 28px;
-            height: 28px;
-            font-size: 0.9rem;
-        }
-        .cadastros-table .status-badge {
-            font-size: 0.7rem;
-            padding: 0.2rem 0.5rem;
-        }
-        .cadastros-pagination {
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        .cadastros-pagination-buttons button {
-            padding: 0.4rem 0.6rem;
-            font-size: 0.8rem;
-        }
-        .cadastros-modal-footer .close-modal-button {
-            font-size: 0.9rem; /* Ajusta o tamanho da fonte no mobile */
-            padding: 0.4rem 0.8rem;
-        }
-        .cadastros-modal-footer .close-modal-button svg {
-            width: 16px;
-            height: 16px;
-        }
-    }
-
-    /* NOVO: Estilos para os Modais de Adição (Usuário/Empresa) */
-    .add-modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.7); /* Fundo mais escuro para sobrepor o modal de cadastros */
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 2001; /* Acima do modal de cadastros (z-index: 2000) */
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.3s ease, visibility 0.3s ease;
-    }
-    .add-modal-overlay.show {
-        opacity: 1;
-        visibility: visible;
-    }
-    .add-modal-content {
-        background-color: white;
-        padding: 1.5rem;
-        border-radius: 0.75rem;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3); /* Sombra mais forte */
-        text-align: left;
-        max-width: 600px; /* Largura ajustada para os campos */
-        width: 90%;
-        transform: translateY(-30px);
-        opacity: 0;
-        transition: transform 0.3s ease, opacity 0.3s ease;
-        display: flex;
-        flex-direction: column;
-    }
-    .add-modal-overlay.show .add-modal-content {
-        transform: translateY(0);
-        opacity: 1;
-    }
-    .add-modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1.5rem;
-    }
-    .add-modal-header h3 {
-        font-size: 1.5rem;
-        font-weight: 600;
-        color: #333;
-        margin: 0;
-    }
-    /* O botão de fechar 'X' foi removido, então este estilo não é más necessário */
-    /* .add-modal-header .close-button {
-        background: none;
-        border: none;
-        font-size: 2rem;
-        color: #718096;
-        cursor: pointer;
-        transition: color 0.2s ease;
-    }
-    .add-modal-header .close-button:hover {
-        color: #4A5568;
-    } */
-    .add-modal-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr; /* Duas colunas */
-        gap: 1rem 2rem; /* Espaço vertical e horizontal */
-        margin-bottom: 1.5rem;
-    }
-    .add-modal-grid .form-group {
-        display: flex;
-        flex-direction: column;
-    }
-    .add-modal-grid label {
-        font-weight: 500;
-        color: #4A5568;
-        margin-bottom: 0.4rem;
-    }
-    .add-modal-grid input[type="text"],
-    .add-modal-grid input[type="email"],
-    .add-modal-grid input[type="tel"],
-    .add-modal-grid select { /* Adicionado estilo para select */
-        padding: 0.75rem;
-        border: 1px solid #CBD5E0;
-        border-radius: 0.5rem;
-        font-size: 1rem;
-        box-sizing: border-box;
-        background-color: white; /* Garante fundo branco para selects */
-    }
-    .add-modal-grid input:focus,
-    .add-modal-grid select:focus { /* Adicionado estilo para select no foco */
-        outline: none;
-        border-color: #6200EE;
-        box-shadow: 0 0 0 3px rgba(98, 0, 238, 0.2);
-    }
-    .add-modal-grid .status-toggle {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        /* grid-column: span 2; Removido para permitir que o toggle fique em uma coluna */
-    }
-    .add-modal-grid .status-toggle label {
-        margin-bottom: 0; /* Remove margem inferior para alinhamento */
-    }
-    /* Estilo para o toggle switch (checkbox customizado) */
-    .add-modal-grid .switch {
-        position: relative;
-        display: inline-block;
-        width: 44px; /* Largura do switch */
-        height: 24px; /* Altura do switch */
-    }
-    .add-modal-grid .switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
-    .add-modal-grid .slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: #ccc;
-        transition: .4s;
-        border-radius: 24px; /* Cantos arredondados */
-    }
-    .add-modal-grid .slider:before {
-        position: absolute;
-        content: "";
-        height: 16px; /* Altura do círculo */
-        width: 16px; /* Largura do círculo */
-        left: 4px;
-        bottom: 4px;
-        background-color: white;
-        transition: .4s;
-        border-radius: 50%;
-    }
-    .add-modal-grid input:checked + .slider {
-        background-color: #6200EE; /* Cor primária quando ativo */
-    }
-    .add-modal-grid input:focus + .slider {
-        box-shadow: 0 0 1px #6200EE;
-    }
-    .add-modal-grid input:checked + .slider:before {
-        transform: translateX(20px); /* Move o círculo para a direita */
-    }
-
-    .add-modal-buttons {
-        display: flex;
-        justify-content: flex-end;
-        gap: 0.75rem;
-        margin-top: 1rem;
-    }
-    .add-modal-buttons button {
-        padding: 0.75rem 1.5rem;
-        border-radius: 0.5rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background-color 0.2s ease, transform 0.1s ease;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    .add-modal-buttons button.cancel-btn {
-        background-color: #E2E8F0;
-        color: #2D3748;
-    }
-    .add-modal-buttons button.cancel-btn:hover {
-        background-color: #CBD5E0;
-    }
-    .add-modal-buttons button.save-btn {
-        background-color: #6200EE;
-        color: white;
-    }
-    .add-modal-buttons button.save-btn:hover {
-        background-color: #5A73D4;
-    }
-
-    /* Media Queries para os novos modais de adição */
-    @media (max-width: 640px) {
-        .add-modal-content {
-            padding: 1rem;
-            width: 95%;
-        }
-        .add-modal-header h3 {
-            font-size: 1.3rem;
-        }
-        /* O botão de fechar 'X' foi removido, então este estilo não é más necessário */
-        /* .add-modal-header .close-button {
-            font-size: 1.5rem;
-        } */
-        .add-modal-grid {
-            grid-template-columns: 1fr; /* Uma coluna em telas menores */
-            gap: 1rem;
-        }
-        .add-modal-grid .status-toggle {
-            grid-column: span 1; /* Ocupa uma coluna */
-        }
-        .add-modal-buttons {
-            flex-direction: column; /* Botões empilhados em telas menores */
-            gap: 0.5rem;
-        }
-        .add-modal-buttons button {
-            width: 100%;
-        }
-    }
-  </style>
+    </style>
 </head>
-
 <body>
-  <!-- Botão para alternar a visibilidade da sidebar -->
-  <button class="toggle-sidebar" onclick="toggleSidebar()">☰</button>
-
-  <!-- Sidebar (Menu lateral) -->
-  <div class="sidebar" id="sidebar">
-    <!-- Logo do VigiOn (agora como texto) -->
-    <div class="logo">VigiOn</div>
-    <h3>Funções</h3>
-    <ul>
-      <!-- Seção Localizar Equipe -->
-      <li>
-        <button onclick="loadView('localizar')" id="btn-localizar">
-          Localizar Equipe
-        </button>
-      </li>
-      <li id="search-placeholder"></li>
-
-      <!-- Seção Histórico -->
-      <li>
-        <button onclick="loadView('historico')" id="btn-historico">
-          Histórico
-        </button>
-      </li>
-      <li id="historico-placeholder"></li>
-
-      <!-- Seção Criar Rota -->
-      <li>
-        <button onclick="loadView('rota')" id="btn-rota">
-          Criar Rota
-        </button>
-      </li>
-      <li id="rota-placeholder"></li>
-
-      <!-- Botão de Configurações -->
-      <li>
-        <button onclick="openSettingsModal()" id="btn-settings">
-          Configurações
-        </button>
-      </li>
-
-      <!-- Botão de Atalhos (anteriormente "Controles") -->
-      <li>
-        <button onclick="openShortcutsModal()" id="btn-atalhos">
-          Atalhos
-        </button>
-      </li>
-
-      <!-- Botão de Cadastros -->
-      <li>
-        <button onclick="openCadastrosModal()" id="btn-cadastros">
-          Cadastros
-        </button>
-      </li>
-
-      <!-- NOVO: Botão de Permissões (agora redireciona para uma nova tela) -->
-      <li>
-        <button onclick="redirectToPermissionsPanel()" id="btn-permissions">
-          Permissões
-        </button>
-      </li>
-    </ul>
-
-    <!-- Área de informação do usuário logado -->
-    <div class="mt-auto pt-4 border-t border-gray-600 text-sm text-center">
-        <!-- Adicionado onclick para abrir o modal de edição de perfil -->
-        <p class="font-bold text-lg text-white mb-1 cursor-pointer" id="loggedInUsername" onclick="openProfileEditModal()">[Nome do Usuário]</p>
-        <p class="text-gray-300" id="loggedInCompany">[Nome da Empresa]</p>
-        <p class="text-400 text-xs" id="loggedInAccessType">[Tipo de Acesso]</p>
-        <button onclick="logout()" class="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors duration-200">Sair</button>
+    <div class="login-container">
+        <!-- Logo VigiOn - O texto agora tem um estilo de logo -->
+        <div class="logo font-bold text-3xl text-purple-700">VigiOn</div>
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6">Acessar Dashboard</h2>
+        <input type="text" id="username" class="input-field" placeholder="Usuário" autocomplete="username">
+        <input type="password" id="password" class="input-field" placeholder="Senha" autocomplete="current-password">
+        <div class="remember-me">
+            <input type="checkbox" id="rememberMe">
+            <label for="rememberMe">Lembrar-me</label>
+        </div>
+        <button id="loginButton" class="login-button">Entrar</button>
+        
+        <p class="footer-text">© 2025 VigiOn. Todos os direitos reservados.</p>
     </div>
-  </div>
 
-  <!-- Contêiner do mapa -->
-  <div id="map"></div>
+    <!-- Modal para Mensagens de Erro/Sucesso -->
+    <div id="messageModal" class="message-modal-overlay">
+        <div class="message-modal-content">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4"></h3>
+            <p id="modalMessageText" class="text-gray-700 mb-6"></p>
+            <button id="closeModalButton" class="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                OK
+            </button>
+        </div>
+    </div>
 
-  <!-- Modal para Mensagens de Erro/Validação -->
-  <div id="messageModal" class="message-modal-overlay">
-      <div class="message-modal-content">
-          <h3 class="text-xl font-semibold text-gray-800 mb-4">Atenção!</h3>
-          <p id="modalMessageText" class="text-gray-700 mb-6">Mensagem de exemplo.</p>
-          <button id="closeModalButton" class="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-              OK
-          </button>
-      </div>
-  </div>
+    <script>
+        // URL da sua API do Google Apps Script para AUTENTICAÇÃO E LOGIN.
+        // **ATENÇÃO: SUBSTITUA ESTA URL PELA URL DO SEU NOVO SCRIPT DOOGET PUBLICADO!**
+        const APPS_SCRIPT_AUTH_URL = "https://script.google.com/macros/s/AKfycbyky4SrOqcQO-bRrAab8PNQR6UD0CIbmyKz-giYeOSbm-Avf3DGlL-qflmP-kMZs7PMrA/exec";
 
-  <!-- Modal de Edição de Perfil -->
-  <div id="profileEditModal" class="profile-modal-overlay">
-      <div class="profile-modal-content">
-          <h3>Editar Perfil</h3>
-          <label for="editProfileName">Nome:</label>
-          <input type="text" id="editProfileName" placeholder="Nome Completo">
-
-          <label for="editProfileCompany">Empresa:</label>
-          <input type="text" id="editProfileCompany" placeholder="Nome da Empresa">
-
-          <label for="editProfilePassword">Nova Senha:</label>
-          <input type="password" id="editProfilePassword" placeholder="Deixe em branco para manter a atual">
-
-          <div class="profile-modal-buttons">
-              <button class="cancel-btn" onclick="cancelProfileEdit()">Cancelar</button>
-              <button class="update-btn" id="updateProfileButton">Atualizar</button>
-          </div>
-      </div>
-  </div>
-
-  <!-- Modal de Configurações do Mapa -->
-  <div id="settingsModal" class="settings-modal-overlay">
-      <div class="settings-modal-content">
-          <h3>Configurações do Mapa</h3>
-          <div class="radio-group">
-              <label>
-                  <input type="radio" name="mapView" value="default" checked> Padrão
-              </label>
-              <label>
-                  <input type="radio" name="mapView" value="satellite"> Satélite
-              </label>
-              <!-- Opção "Relevo (Ruas/Bairros)" foi removida conforme solicitado -->
-          </div>
-          <button onclick="applyMapSettings()">Aplicar</button>
-      </div>
-  </div>
-
-  <!-- Modal de Atalhos -->
-  <div id="shortcutsModal" class="shortcuts-modal-overlay">
-      <div class="shortcuts-modal-content">
-          <h3>Atalhos de Teclado</h3>
-          <ul class="shortcuts-list">
-              <li>
-                  <span class="shortcut-key">Ctrl + R</span>
-                  <span class="shortcut-description">Atualiza os marcadores do mapa sem alterar o foco ou o zoom atual do usuário.</span>
-              </li>
-              <li>
-                  <span class="shortcut-key">Ctrl + P</span>
-                  <span class="shortcut-description">Imprime o relatório de histórico.</span>
-              </li>
-              <!-- NOVO ATALHO ADICIONADO AQUI -->
-              <li>
-                  <span class="shortcut-key">Ctrl + F</span>
-                  <span class="shortcut-description">Ativa a função "Localizar Equipe" e foca no campo de busca.</span>
-              </li>
-          </ul>
-          <button onclick="closeShortcutsModal()">Fechar</button>
-      </div>
-  </div>
-
-  <!-- Modal de Cadastros -->
-  <div id="cadastrosModal" class="cadastros-modal-overlay">
-      <div class="cadastros-modal-content">
-          <div class="cadastros-header">
-              <h3>Painel de Cadastros</h3>
-              <!-- O botão "+ Adicionar" agora chama a função openAddModal() -->
-              <button id="addCadastrosButton">+ Adicionar</button>
-          </div>
-          
-          <div class="cadastros-tabs">
-              <button class="cadastros-tab-button active" id="tabUsers" onclick="showCadastrosTab('users')">Usuários</button>
-              <button class="cadastros-tab-button" id="tabCompanies" onclick="showCadastrosTab('companies')">Empresas</button>
-          </div>
-
-          <div id="cadastrosUsersContent" class="cadastros-tab-content">
-              <div class="cadastros-filters">
-                  <input type="text" placeholder="Pesquisar por nome..." />
-                  <label for="statusFilterUsers">Status:</label>
-                  <select id="statusFilterUsers">
-                      <option value="ativos">Ativos</option>
-                      <option value="inativos">Inativos</option>
-                      <option value="bloqueados">Bloqueados</option>
-                      <option value="todos">Todos</option>
-                  </select>
-              </div>
-              <div class="cadastros-table-container">
-                  <table class="cadastros-table">
-                      <thead>
-                          <tr>
-                              <th>USUÁRIO</th>
-                              <th>NOME</th>
-                              <th>EMPRESA</th>
-                              <th>ACESSO</th>
-                              <th>AÇÕES</th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          <!-- Exemplo de dados de Usuários (atualizados) -->
-                          <tr>
-                              <td>joaosilva</td>
-                              <td><span class="user-avatar">JS</span> João Silva</td>
-                              <td>Empresa A</td>
-                              <td>Admin</td>
-                              <td class="action-buttons">
-                                  <button title="Visualizar">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                  </button>
-                                  <button title="Editar">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/></svg>
-                                  </button>
-                                  <button title="Bloquear">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                  </button>
-                                  <button title="Excluir">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                                  </button>
-                              </td>
-                          </tr>
-                          <tr>
-                              <td>mariasouza</td>
-                              <td><span class="user-avatar">MS</span> Maria Souza</td>
-                              <td>Empresa B</td>
-                              <td>Gestor</td>
-                              <td class="action-buttons">
-                                  <button title="Visualizar">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                  </button>
-                                  <button title="Editar">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/></svg>
-                                  </button>
-                                  <button title="Bloquear">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                  </button>
-                                  <button title="Excluir">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                                  </button>
-                              </td>
-                          </tr>
-                          <tr>
-                              <td>carlosoliver</td>
-                              <td><span class="user-avatar">CO</span> Carlos Oliveira</td>
-                              <td>Empresa C</td>
-                              <td>Usuário</td>
-                              <td class="action-buttons">
-                                  <button title="Visualizar">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                  </button>
-                                  <button title="Editar">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/></svg>
-                                  </button>
-                                  <button title="Bloquear">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                  </button>
-                                  <button title="Excluir">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                                  </button>
-                              </td>
-                          </tr>
-                          <tr>
-                              <td>anasantos</td>
-                              <td><span class="user-avatar">AS</span> Ana Santos</td>
-                              <td>Empresa A</td>
-                              <td>Visitante</td>
-                              <td class="action-buttons">
-                                  <button title="Visualizar">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                  </button>
-                                  <button title="Editar">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/></svg>
-                                  </button>
-                                  <button title="Bloquear">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                  </button>
-                                  <button title="Excluir">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                                  </button>
-                              </td>
-                          </tr>
-                          <tr>
-                              <td>pedrocosta</td>
-                              <td><span class="user-avatar">PC</span> Pedro Costa</td>
-                              <td>Empresa B</td>
-                              <td>Usuário</td>
-                              <td class="action-buttons">
-                                  <button title="Visualizar">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                  </button>
-                                  <button title="Editar">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/></svg>
-                                  </button>
-                                  <button title="Bloquear">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                  </button>
-                                  <button title="Excluir">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                                  </button>
-                              </td>
-                          </tr>
-                      </tbody>
-                  </table>
-              </div>
-              <div class="cadastros-pagination">
-                  <span>Mostrando 1 a 4 de 4 resultados</span>
-                  <div class="cadastros-pagination-buttons">
-                      <button>&lt;</button>
-                      <button class="active">1</button>
-                      <button disabled>&gt;</button>
-                  </div>
-              </div>
-          </div>
-
-          <!-- Rodapé do Modal de Cadastros com o botão de fechar -->
-          <div class="cadastros-modal-footer">
-              <button class="close-modal-button" onclick="closeCadastrosModal()">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                  Fechar
-              </button>
-          </div>
-      </div>
-  </div>
-
-  <!-- NOVO: Modal para Adicionar Novo Usuário -->
-  <div id="addUserModal" class="add-modal-overlay">
-      <div class="add-modal-content">
-          <div class="add-modal-header">
-              <h3>Adicionar Novo Usuário</h3>
-              <!-- Botão de fechar 'X' removido daqui -->
-          </div>
-          <div class="add-modal-grid">
-              <div class="form-group">
-                  <label for="addUserUsername">Usuário</label>
-                  <input type="text" id="addUserUsername" placeholder="Nome de usuário">
-              </div>
-              <div class="form-group">
-                  <label for="addUserFullName">Nome</label>
-                  <input type="text" id="addUserFullName" placeholder="Nome completo do usuário">
-              </div>
-              <div class="form-group">
-                  <label for="addUserCompany">Empresa</label>
-                  <select id="addUserCompany">
-                      <option value="Empresa 1">Empresa 1</option>
-                      <option value="Empresa 2">Empresa 2</option>
-                      <option value="Empresa 3">Empresa 3</option>
-                  </select>
-              </div>
-              <!-- Coluna Autenticação removida da tabela, mas mantida no formulário de adição -->
-              <div class="form-group status-toggle">
-                  <label for="addUserAuthentication">Autenticação</label>
-                  <label class="switch">
-                      <input type="checkbox" id="addUserAuthentication" checked>
-                      <span class="slider"></span>
-                  </label>
-                  <span id="authStatusText">SIM</span>
-              </div>
-              <div class="form-group">
-                  <label for="addUserAccess">Acesso</label>
-                  <select id="addUserAccess">
-                      <option value="Admin">Admin</option>
-                      <option value="Gestor">Gestor</option>
-                      <option value="Usuario">Usuário</option>
-                      <option value="Visitante">Visitante</option>
-                  </select>
-              </div>
-              <div class="form-group">
-                  <label for="addUserPassword">Senha</label>
-                  <input type="text" id="addUserPassword" readonly>
-              </div>
-          </div>
-          <div class="add-modal-buttons">
-              <button class="cancel-btn" onclick="closeAddUserModal()">Cancelar</button>
-              <button class="save-btn" onclick="saveNewUser()">Salvar</button>
-          </div>
-      </div>
-  </div>
-
-  <!-- NOVO: Modal para Adicionar Nova Empresa -->
-  <div id="addCompanyModal" class="add-modal-overlay">
-      <div class="add-modal-content">
-          <div class="add-modal-header">
-              <h3>Adicionar Nova Empresa</h3>
-              <!-- Botão de fechar 'X' removido daqui -->
-          </div>
-          <div class="add-modal-grid">
-              <div class="form-group">
-                  <label for="addCompanyCNPJ">CNPJ</label>
-                  <input type="text" id="addCompanyCNPJ" placeholder="XX.XXX.XXX/XXXX-XX">
-              </div>
-              <div class="form-group">
-                  <label for="addCompanyCompanyName">Nome Empresa</label>
-                  <input type="text" id="addCompanyCompanyName" placeholder="Nome completo da empresa">
-              </div>
-              <div class="form-group">
-                  <label for="addCompanyOwner">Proprietário Empresa</label>
-                  <input type="text" id="addCompanyOwner" placeholder="Nome do proprietário">
-              </div>
-              <!-- Telefone e E-mail removidos da tabela, mas mantidos no formulário de adição -->
-              <div class="form-group">
-                  <label for="addCompanyPhone">Telefone</label>
-                  <input type="tel" id="addCompanyPhone" placeholder="(XX) XXXX-XXXX">
-              </div>
-              <div class="form-group">
-                  <label for="addCompanyEmail">E-mail</label>
-                  <input type="email" id="addCompanyEmail" placeholder="contato@empresa.com">
-              </div>
-              <div class="form-group">
-                  <label for="addCompanyAddress">Endereço</label>
-                  <input type="text" id="addCompanyAddress" placeholder="Rua, Número, Bairro, Cidade">
-              </div>
-              <div class="form-group status-toggle">
-                  <label for="addCompanyStatus">Status</label>
-                  <label class="switch">
-                      <input type="checkbox" id="addCompanyStatus" checked>
-                      <span class="slider"></span>
-                  </label>
-                  <span id="companyStatusText">Ativo</span>
-              </div>
-          </div>
-          <div class="add-modal-buttons">
-              <button class="cancel-btn" onclick="closeAddCompanyModal()">Cancelar</button>
-              <button class="save-btn" onclick="saveNewCompany()">Salvar</button>
-          </div>
-      </div>
-  </div>
-
-  <!-- REMOVIDO: Modal de Permissões (agora é uma tela separada) -->
-  <!-- REMOVIDO: Modal para Adicionar Nova Permissão (agora é uma tela separada) -->
-
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <script>
-    // URL da sua API do Google Apps Script para AUTENTICAÇÃO E LOGIN (apenas).
-    const APPS_SCRIPT_AUTH_URL = "https://script.google.com/macros/s/AKfycbwgVmJNqjF5K67jeCHsNxMvEoa7llHrUECUUw87zZB78BvENWIlc1iipVA2_UdP-a3n/exec";
-    // URL da sua API do Google Apps Script para ATUALIZAR PERFIL.
-    // **ATENÇÃO: SUBSTITUA ESTA URL PELA URL DO SEU SCRIPT DE ATUALIZAÇÃO DE PERFIL PUBLICADO!**
-    const APPS_SCRIPT_UPDATE_PROFILE_URL = "https://script.google.com/macros/s/AKfycbzccQni56-0Yrt44G4JLebbphHAKRfMM95eleOrekkwRVdE6brSrs5mAYMNOj9eXDixQ/exec"; // URL fornecida pelo usuário
-    // NOVO: URL da sua API do Google Apps Script para BUSCAR LOCALIZAÇÕES.
-    const APPS_SCRIPT_FETCH_LOCATIONS_URL = "https://script.google.com/macros/s/AKfycbyQP3LZRKaPQzX-HZ_EHi3ENBlEATgKlZeTDE541sts1UoOODJuNkLecFeLKFhDJkJfPw/exec"; 
-    // NOVO: URL da sua API do Google Apps Script para BUSCAR HISTÓRICO DE LOCALIZAÇÕES.
-    // **ATENÇÃO: SUBSTITUA ESTA URL PELA URL DO SEU NOVO SCRIPT DE HISTÓRICO PUBLICADO!**
-    const APPS_SCRIPT_FETCH_HISTORICO_URL = "https://script.google.com/macros/s/AKfycbxgLtx18zJcbD_UJZ5gv9Yhn_gcN7XSJPGLL5xFaDbHTKlZcIFd0Wc4jYh8YrYuxZK5/exec"; // URL fornecida pelo usuário
-
-    // Variáveis globais para o mapa Leaflet
-    let map;
-    let currentTileLayer; // Para gerenciar a camada de tiles atual
-    let markersLayer; // Camada para marcadores de localização atual
-    let tempCoordMarkerLayer; // NOVA: Camada para marcadores temporários de coordenadas (CORRIGIDO: Inicialização adicionada)
-    let allMarkers = []; // Armazena todos os dados de marcadores atuais (Localizações)
-    let historicoMarkers = []; // Armazena marcadores do histórico
-    let currentHistoricoData = []; // NOVO: Armazena os dados brutos do histórico para geração de PDF
-
-    // Variável global para rastrear a view ativa (localizar, historico, rota)
-    let currentActiveView = null; // Inicialmente nenhuma view está ativa
-
-    // Definição das camadas de mapa
-    const tileLayers = {
-        default: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }),
-        satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-        })
-    };
-
-    // Coordenadas de Cuiabá - MT (Centro aproximado)
-    const CUIABA_LAT = -15.6014;
-    const CUIABA_LON = -56.0979;
-    const INITIAL_ZOOM = 13; // Nível de zoom razoável para a cidade
-
-    // Variável para o temporizador de inatividade
-    let inactivityTimer;
-    // Tempo limite de inatividade em milissegundos (30 minutos)
-    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutos * 60 segundos * 1000 milissegundos
-
-    // Variável para o temporizador de atualização do mapa
-    let mapUpdateInterval;
-    const MAP_UPDATE_INTERVAL_MS = 60 * 1000; // 60 segundos
-
-    // Variável para armazenar a aba ativa no modal de cadastros
-    let activeCadastrosTab = 'users'; // 'users' ou 'companies'
-
-    // REMOVIDO: permissionsData array (agora será gerenciado na nova tela de permissões)
-
-    /** Funções do Modal de Mensagens */
-    function showMessageModal(title, message, callback = null) {
-        const modalOverlay = document.getElementById('messageModal');
-        const modalTitle = modalOverlay.querySelector('h3'); // Seleciona o h3 dentro do modal
+        // Referências aos elementos HTML
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const rememberMeCheckbox = document.getElementById('rememberMe');
+        const loginButton = document.getElementById('loginButton');
+        const messageModal = document.getElementById('messageModal');
+        const modalTitle = messageModal.querySelector('h3');
         const modalMessageText = document.getElementById('modalMessageText');
         const closeModalButton = document.getElementById('closeModalButton');
-        
-        modalTitle.textContent = title;
-        modalMessageText.textContent = message;
-        modalOverlay.classList.add('show');
 
-        // Remove listeners anteriores para evitar múltiplos disparos
-        closeModalButton.removeEventListener('click', modalCallbackHandler);
-
-        // Adiciona o novo handler para o botão 'OK' do modal
-        closeModalButton.addEventListener('click', modalCallbackHandler);
-
-        // Define a função de callback a ser executada quando o modal for fechado (pelo clique no OK)
-        function modalCallbackHandler() {
-            modalOverlay.classList.remove('show');
-            closeModalButton.removeEventListener('click', modalCallbackHandler); // Remove o listener temporário
-            if (callback) {
-                callback();
-            }
-        }
-    }
-
-    /** Alterna a visibilidade da sidebar */
-    function toggleSidebar() {
-      const sidebar = document.getElementById('sidebar');
-      const btn = document.querySelector('.toggle-sidebar');
-      sidebar.classList.toggle('minimized');
-      btn.style.left = sidebar.classList.contains('minimized') ? '1rem' : '295px';
-    }
-
-    /**
-     * Troca de “view” no dashboard:
-     * Controla a exibição dos formulários de cada seção (Localizar, Histórico, Rota).
-     * Se a view clicada já estiver ativa, esconde seus subcampos.
-     */
-    function loadView(view) {
-      const searchPlaceholder = document.getElementById('search-placeholder');
-      const historicoPlaceholder = document.getElementById('historico-placeholder');
-      const rotaPlaceholder = document.getElementById('rota-placeholder');
-      
-      // Se a view clicada já é a view ativa, esconde-a
-      if (view === currentActiveView) {
-          if (view === 'localizar') {
-              searchPlaceholder.innerHTML = '';
-              stopMapUpdates(); // Para as atualizações do mapa se for a view Localizar Equipe
-          } else if (view === 'historico') {
-              historicoPlaceholder.innerHTML = '';
-              historicoMarkers.forEach(m => map.removeLayer(m));
-              historicoMarkers = [];
-              currentHistoricoData = [];
-          } else if (view === 'rota') {
-              rotaPlaceholder.innerHTML = '';
-          }
-          document.getElementById(`btn-${view}`).classList.remove('active');
-          currentActiveView = null; // Nenhuma view está ativa agora
-          return; // Sai da função
-      }
-
-      // Limpa todos os placeholders (onde os formulários serão injetados)
-      searchPlaceholder.innerHTML = '';
-      historicoPlaceholder.innerHTML = '';
-      rotaPlaceholder.innerHTML = '';
-
-      // Limpa marcadores temporários de coordenadas ao mudar de view
-      if (tempCoordMarkerLayer) {
-          tempCoordMarkerLayer.clearLayers();
-      }
-      // Limpa marcadores de histórico ao mudar de view
-      historicoMarkers.forEach(m => map.removeLayer(m));
-      historicoMarkers = [];
-      currentHistoricoData = []; // Limpa os dados de histórico para PDF também
-
-      // Desativa todos os botões de função
-      document.querySelectorAll('.sidebar button').forEach(button => {
-          if (button.id.startsWith('btn-')) {
-              button.classList.remove('active');
-          }
-      });
-
-      // Lógica para exibir a UI da view selecionada e ativar o botão correspondente
-      if (view === 'localizar') {
-        document.getElementById('btn-localizar').classList.add('active');
-        searchPlaceholder.innerHTML = `
-          <div id="search-container" style="display: flex;">
-            <input type="text" id="search-input" placeholder="Nomes ou Coordenadas" />
-            <button id="btn-search">Buscar</button>
-          </div>
-        `;
-        // Garante que o campo de busca esteja vazio ao carregar a view.
-        const searchInput = document.getElementById('search-input');
-        const searchButton = document.getElementById('btn-search');
-
-        if (searchInput) {
-            searchInput.value = ''; // Campo vazio
-            searchInput.focus(); // Foca no campo de busca
-            // Adiciona listener para o botão de busca
-            searchButton.onclick = performLocalSearch;
-            // Adiciona listener para a tecla Enter no campo de busca
-            searchInput.addEventListener('keyup', (e) => {
-                if (e.key === 'Enter') {
-                    performLocalSearch();
-                }
-            });
-        }
-        // Inicia a atualização do mapa para a view "Localizar Equipe"
-        startMapUpdates(true); // Inicia com recentralização
-        currentActiveView = 'localizar'; // Define a view ativa
-
-      } else if (view === 'historico') {
-        document.getElementById('btn-historico').classList.add('active');
-        historicoPlaceholder.innerHTML = `
-          <div id="historico-container" style="display: flex;">
-            <input type="datetime-local" id="hist-date-start" title="Data/Hora Inicial" />
-            <input type="datetime-local" id="hist-date-end" title="Data/Hora Final" />
-            <input type="text" id="hist-center-lat" placeholder="Latitude (ex: -15.67097)" />
-            <input type="text" id="hist-center-lon" placeholder="Longitude (ex: -56.0416)" />
-            <input type="number" id="hist-radius-km" placeholder="Raio (km, ex: 2)" value="2" min="0.1" step="0.1" />
-            <button id="btn-historico-buscar">Buscar Histórico</button>
-            <button id="btn-historico-pdf">Gerar PDF do Histórico</button>
-          </div>
-        `;
-        // Adicionar listeners para os campos de data e botão de busca
-        document.getElementById('hist-date-start').focus();
-        // O onclick do botão "Buscar Histórico" agora chama a função fetchHistorico
-        document.getElementById('btn-historico-buscar').onclick = fetchHistorico; 
-        // Conecta o botão de PDF à nova função de geração de PDF
-        document.getElementById('btn-historico-pdf').onclick = generateHistoricoPdf;
-        
-        // Para a atualização do mapa ao sair da view "Localizar Equipe"
-        stopMapUpdates();
-        // Limpa os marcadores do mapa de localização atual
-        markersLayer.clearLayers();
-        allMarkers = [];
-        currentActiveView = 'historico'; // Define a view ativa
-
-      } else if (view === 'rota') {
-        document.getElementById('btn-rota').classList.add('active');
-        rotaPlaceholder.innerHTML = `
-          <div id="rota-container" style="display: flex;">
-            <input type="text" id="rota-latlng" placeholder="Coordenadas de destino (lat,lon)" />
-            <button id="btn-rota-buscar">Buscar Rotas</button>
-          </div>
-        `;
-        // Adicionar listeners básicos para o layout
-        document.getElementById('rota-latlng').focus();
-        showMessageModal('Funcionalidade de Rota', 'A funcionalidade de criação de rotas será implementada em breve. O mapa já está ativo!');
-        document.getElementById('btn-rota-buscar').onclick = () => showMessageModal('Funcionalidade de Rota', 'A funcionalidade de criação de rotas será implementada em breve. O mapa já está ativo!');
-        document.getElementById('rota-latlng').addEventListener('keyup', e => {
-          if (e.key === 'Enter') showMessageModal('Funcionalidade de Rota', 'A funcionalidade de criação de rotas será implementada em breve. O mapa já está ativo!');
+        // Adiciona listener para fechar o modal
+        closeModalButton.addEventListener('click', () => {
+            messageModal.classList.remove('show');
         });
-        // Para a atualização do mapa ao sair da view "Localizar Equipe"
-        stopMapUpdates();
-        // Limpa os marcadores do mapa
-        markersLayer.clearLayers();
-        allMarkers = [];
-        historicoMarkers.forEach(m => map.removeLayer(m));
-        historicoMarkers = [];
-        currentHistoricoData = []; // Limpa os dados de histórico para PDF também
-        currentActiveView = 'rota'; // Define a view ativa
-      }
-    }
 
-    /** Logout do usuário */
-    function logout() {
-      // Limpa todos os dados de sessão/lembrar-me
-      localStorage.removeItem('vigion_user_data');
-      localStorage.removeItem('vigion_username');
-      localStorage.removeItem('vigion_company'); 
-      // Para a atualização do mapa
-      stopMapUpdates();
-      // Redireciona para a tela de login
-      window.location.replace('index.html'); 
-    }
+        // Função para exibir o modal de mensagens
+        function showMessage(title, message, callback = null, autoClose = true) {
+            modalTitle.textContent = title;
+            modalMessageText.textContent = message;
+            messageModal.classList.add('show');
 
-    /**
-     * Verifica a autenticação do usuário ao carregar a página do dashboard.
-     * Agora, ela usará os dados do localStorage salvos no login
-     * e os exibirá nas labels da sidebar.
-     * Se os dados não existirem ou estiverem incompletos, redireciona para o login.
-     */
-    async function checkDashboardAuth() {
-        const userDataString = localStorage.getItem('vigion_user_data');
-        
-        if (!userDataString) {
-            console.log("Nenhum dado de usuário encontrado no localStorage. Redirecionando para login.");
-            window.location.replace('index.html'); 
-            return false;
-        }
+            closeModalButton.removeEventListener('click', modalCallbackHandler);
 
-        let userData;
-        try {
-            userData = JSON.parse(userDataString);
-        } catch (e) {
-            console.error("Erro ao parsear dados do usuário do localStorage:", e);
-            localStorage.clear(); // Limpa dados corrompidos
-            window.location.replace('index.html');
-            return false;
-        }
-
-        // Verifica se os dados essenciais para o dashboard estão presentes
-        // Agora, incluímos 'password' na verificação, pois ele será salvo no index.html
-        // O `id` é o `username` que o Apps Script retorna como `data.id`
-        if (!userData || !userData.id || !userData.nomeCompleto || !userData.autenticado || !userData.password) {
-            console.log("Dados essenciais do usuário incompletos no localStorage. Redirecionando para login.");
-            localStorage.clear();
-            window.location.replace('index.html');
-            return false;
-        }
-
-        // Preenche as labels diretamente com os dados do localStorage.
-        document.getElementById('loggedInUsername').textContent = userData.nomeCompleto || 'N/A';
-        document.getElementById('loggedInCompany').textContent = userData.company || 'N/A';
-        document.getElementById('loggedInAccessType').textContent = userData.tipoAcesso || 'Visitante';
-        
-        console.log("Usuário autenticado via localStorage.");
-        return true; 
-    }
-
-    /** Inicializa mapa com Leaflet */
-    function initMap() {
-      // Cria o mapa e centraliza em Cuiabá-MT
-      // Remove os controles de zoom padrão ao inicializar o mapa
-      map = L.map('map', { 
-        zoomControl: false
-        // A linha maxZoom: 19 foi removida para retornar ao comportamento padrão
-      }).setView([CUIABA_LAT, CUIABA_LON], INITIAL_ZOOM);
-
-      // Define a camada padrão ao iniciar, ou a salva no localStorage
-      const savedMapType = localStorage.getItem('vigion_map_type') || 'default';
-      currentTileLayer = tileLayers[savedMapType];
-      currentTileLayer.addTo(map);
-
-      // Altera a atribuição do Leaflet para o canto inferior direito e garante o formato "Leaflet | leaflet"
-      // Conforme a imagem, apenas "Leaflet" é o link, "leaflet" é texto simples sem link.
-      map.attributionControl.setPrefix('<a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> | leaflet');
-
-      markersLayer = L.layerGroup().addTo(map); // Inicializa a camada de marcadores
-      tempCoordMarkerLayer = L.layerGroup().addTo(map); // CORRIGIDO: Inicializa a camada para marcadores temporários de coordenadas
-
-      // Garante que o mapa se redimensione corretamente se o contêiner mudar de tamanho
-      map.invalidateSize(); 
-
-      // Listener para redimensionamento da janela (opcional, Leaflet já lida bem com isso)
-      window.addEventListener('resize', () => {
-        map.invalidateSize();
-      });
-
-      console.log("Mapa Leaflet inicializado em Cuiabá-MT.");
-    }
-
-    /** Converte a string de data serializada do Google Sheets para um objeto JS Date */
-    function parseSerializedDate(serializedDate) {
-      // Formato esperado: Date(YYYY,MM,DD,hh,mm,ss)
-      const match = serializedDate.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
-      if (!match) return null;
-      // Note: month is 0-indexed in JS Date, so we subtract 1
-      const [_, year, month, day, hour, minute, second] = match.map(Number);
-      return new Date(year, month, day, hour, minute, second);
-    }
-
-    /** Formata um objeto JS Date ou string serializada para “dd/MM/yyyy hh:mm:ss AM/PM” */
-    function formatDateTime(dateInput) {
-      let date;
-      if (typeof dateInput === 'string' && dateInput.startsWith('Date(')) {
-          date = parseSerializedDate(dateInput);
-      } else if (dateInput instanceof Date) {
-          date = dateInput;
-      } else {
-          return dateInput; // Retorna o original se não for string serializada ou Date object
-      }
-
-      if (!date) return dateInput;
-
-      const pad = n => n.toString().padStart(2, '0');
-      const day = pad(date.getDate());
-      const month = pad(date.getMonth() + 1);
-      const year = date.getFullYear();
-      let hrs24 = date.getHours();
-      const h12 = hrs24 % 12 || 12; // Converte 0 para 12 para AM/PM
-      const mins = pad(date.getMinutes());
-      const secs = pad(date.getSeconds());
-      const ampm = hrs24 >= 12 ? 'PM' : 'AM'; // Define AM/PM
-      return `${day}/${month}/${year} ${pad(h12)}:${mins}:${secs} ${ampm}`;
-    }
-
-    /** Cria ícone tipo pin SVG com cor e tamanho ajustados */
-    function createPinIcon(color) {
-      // Tamanho do SVG e anchor point ajustados para um visual melhor
-      const iconSize = [36, 60]; // Reduzido um pouco para ser menos intrusivo
-      const iconAnchor = [18, 58]; // Ponta inferior do pin
-      const popupAnchor = [0, -50]; // Posição do pop-up acima do pin
-
-      const svg = `
-        <svg width="${iconSize[0]}" height="${iconSize[1]}" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg">
-          <path fill="${color}" stroke="black" stroke-width="0.8"
-                d="M12,2C8.13,2,5,5.13,5,9c0,5.25,7,13,7,13s7-7.75,7-13C19,5.13,15.87,2,12,2z"/>
-          <circle fill="white" cx="12" cy="9" r="2.5"/>
-        </svg>
-      `;
-      return L.divIcon({
-        className: 'svg-pin-icon',
-        html: svg,
-        iconSize: iconSize,
-        iconAnchor: iconAnchor,
-        popupAnchor: popupAnchor
-      });
-    }
-
-    /**
-     * Busca os dados de localização via Google Apps Script e atualiza os marcadores no mapa.
-     * @param {boolean} recenterMap - Se true, o mapa será recentralizado e ajustado aos marcadores.
-     * Se false, apenas os marcadores serão atualizados sem mudar o foco do mapa.
-     */
-    async function fetchLocalizacoes(recenterMap = true) {
-      if (!map || !markersLayer) {
-          console.warn("Mapa ou camada de marcadores não inicializados. Pulando fetchLocalizacoes.");
-          return;
-      }
-
-      const userDataString = localStorage.getItem('vigion_user_data');
-      if (!userDataString) {
-          console.error("Dados do usuário não encontrados no localStorage para buscar localizações.");
-          showMessageModal("Erro", "Sua sessão expirou. Por favor, faça login novamente.");
-          logout();
-          return;
-      }
-      const userData = JSON.parse(userDataString);
-      const username = userData.id; // Usar 'id' do userData para o Apps Script
-      const password = userData.password; // A senha é necessária para autenticação no Apps Script
-
-      if (!username || !password) {
-          console.error("Username ou password ausentes nos dados do usuário para buscar localizações.");
-          showMessageModal("Erro", "Dados de login incompletos. Por favor, faça login novamente.");
-          logout();
-          return;
-      }
-
-      const params = new URLSearchParams({
-          username: username,
-          password: password
-      });
-
-      try {
-        const response = await fetch(`${APPS_SCRIPT_FETCH_LOCATIONS_URL}?${params.toString()}`);
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
-        }
-        const result = await response.json();
-
-        if (result.status === "sucesso") {
-            // Limpa o array allMarkers antes de preencher com os novos dados
-            allMarkers = []; 
-
-            result.data.forEach(location => {
-                // CORRIGIDO: Acessando as propriedades com as chaves exatas do Apps Script (case-sensitive)
-                if (location.latitude == null || location.longitude == null || isNaN(location.latitude) || isNaN(location.longitude)) {
-                    console.warn(`Pulando localização inválida para ${location.nome}: Latitude/Longitude inválidas.`);
-                    return;
-                }
-                // Adiciona os dados brutos da localização ao array allMarkers
-                allMarkers.push(location); 
-            });
-
-            // Após carregar todos os dados, renderiza-os no mapa.
-            // Se houver um termo de busca ativo, aplica o filtro.
-            const searchInput = document.getElementById('search-input');
-            if (searchInput && searchInput.value.trim() !== '') {
-                // Se houver um termo de busca, re-aplica o filtro para manter o foco
-                performLocalSearch(false); 
+            if (autoClose && callback) {
+                setTimeout(() => {
+                    messageModal.classList.remove('show');
+                    callback();
+                }, 1500);
+            } else if (!autoClose && callback) {
+                closeModalButton.addEventListener('click', modalCallbackHandler);
             } else {
-                // Caso contrário, exibe todos os marcadores recém-carregados
-                renderMarkers(allMarkers, recenterMap);
+                closeModalButton.addEventListener('click', () => messageModal.classList.remove('show'));
             }
-            console.log(`Localizações atualizadas. ${allMarkers.length} dados carregados.`);
-        } else if (result.status === "erro" && result.message && result.message.includes("Autenticação falhou")) {
-            // Se a autenticação falhou, loga o usuário
-            console.error("Autenticação falhou durante fetchLocalizacoes. Deslogando...");
-            showMessageModal("Sessão Expirada", "Sua sessão expirou ou suas credenciais são inválidas. Por favor, faça login novamente.", () => {
-                logout();
-            });
-        } else {
-            console.error("Erro no Apps Script ao buscar localizações:", result.message);
-            showMessageModal("Erro na Busca", result.message || "Não foi possível carregar as localizações.");
-        }
-      } catch (error) {
-        console.error("Erro ao buscar localizações:", error);
-        showMessageModal("Erro de Conexão", `Não foi possível carregar as localizações: ${error.message}.`);
-      }
-    }
 
-    /**
-     * Renderiza os marcadores no mapa a partir de um array de dados de localização.
-     * @param {Array} locations - Array de objetos de localização a serem renderizados.
-     * @param {boolean} recenterMap - Se true, o mapa será recentralizado e ajustado aos marcadores.
-     */
-    function renderMarkers(locations, recenterMap = true) {
-        markersLayer.clearLayers(); // Limpa todos os marcadores existentes no mapa
-        let bounds = L.latLngBounds([]); // Para ajustar o zoom do mapa
-
-        if (locations.length === 0) {
-            console.log("Nenhum marcador para renderizar.");
-            if (recenterMap) {
-                map.setView([CUIABA_LAT, CUIABA_LON], INITIAL_ZOOM); // Volta para a visão padrão
+            function modalCallbackHandler() {
+                messageModal.classList.remove('show');
+                closeModalButton.removeEventListener('click', modalCallbackHandler);
+                if (callback) {
+                    callback();
+                }
             }
-            return;
         }
 
-        locations.forEach(location => {
-            if (location.latitude == null || location.longitude == null || isNaN(location.latitude) || isNaN(location.longitude)) {
-                console.warn(`Pulando localização inválida para ${location.nome} durante a renderização: Latitude/Longitude inválidas.`);
+        // Carregar credenciais salvas (se "Lembrar-me" estiver marcado)
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedUserDataString = localStorage.getItem('vigion_user_data');
+            if (savedUserDataString) {
+                try {
+                    const savedUserData = JSON.parse(savedUserDataString);
+                    if (savedUserData.rememberMe === true && savedUserData.username) {
+                        usernameInput.value = savedUserData.username;
+                        rememberMeCheckbox.checked = true;
+                    }
+                } catch (e) {
+                    console.error("Erro ao carregar dados do usuário do localStorage:", e);
+                    localStorage.removeItem('vigion_user_data');
+                }
+            }
+        });
+
+        // Função para tentar o login
+        loginButton.addEventListener('click', async () => {
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value.trim(); 
+            
+            if (!username || !password) {
+                showMessage("Erro de Login", "Por favor, preencha todos os campos.", null, false);
                 return;
             }
 
-            let color = '#757575'; // Cor padrão (cinza)
-            const lowerEstado = String(location.estado || '').toLowerCase();
+            loginButton.textContent = "Verificando...";
+            loginButton.disabled = true;
 
-            if      (lowerEstado === 'ativo')     color = '#5A73D4'; // Azul (cor secundária)
-            else if (lowerEstado === 'atencao' || lowerEstado === 'atenção') color = '#FFC107'; // Laranja
-            else if (lowerEstado === 'critico'  || lowerEstado === 'crítico') color = '#F44336'; // Vermelho
-            else if (lowerEstado === 'inativo')  color = '#757575'; // Cinza
-
-            const pinIcon = createPinIcon(color);
-            const marker = L.marker([location.latitude, location.longitude], { icon: pinIcon }).addTo(markersLayer);
-
-            marker.bindTooltip(`<div class="marker-label-popup">${location.nome}</div>`, {
-              permanent: true,
-              direction: 'top',
-              offset: [0, -55],
-              opacity: 0.9
-            }).openTooltip();
-
-            marker.bindPopup(`
-              <strong>Nome:</strong> ${location.nome}<br>
-              <strong>Data/Hora:</strong> ${formatDateTime(location.dataHora)}<br>
-              <strong>Latitude:</strong> ${location.latitude}<br>
-              <strong>Longitude:</strong> ${location.longitude}<br>
-              <strong>Endereço:</strong> ${location.endereco}<br>
-              <strong>Estado do Técnico:</strong> ${location.estado}<br>
-              <strong>Protocolo:</strong> ${location.protocolo}<br>
-              <strong>Status do Dispositivo:</strong> ${location.statusDispositivo}<br>
-              <strong>Observações:</strong> ${location.observacoes}
-            `);
-
-            bounds.extend([location.latitude, location.longitude]);
-        });
-
-        if (markersLayer.getLayers().length > 0 && recenterMap) {
-            map.fitBounds(bounds, { padding: [20, 20] });
-        } else if (recenterMap) {
-            map.setView([CUIABA_LAT, CUIABA_LON], INITIAL_ZOOM);
-        }
-        console.log(`Renderizados ${markersLayer.getLayers().length} marcadores no mapa.`);
-    }
-
-    /**
-     * Realiza a busca local nos marcadores já carregados.
-     * Filtra por nome da equipe ou por coordenadas (Lat,Lon).
-     */
-    function performLocalSearch() {
-        const searchInput = document.getElementById('search-input');
-        const searchTerm = searchInput.value.trim().toLowerCase();
-
-        // Sempre renderiza todos os marcadores existentes primeiro
-        renderMarkers(allMarkers, false); // Não recentraliza ainda, foco será ajustado depois
-
-        // Limpa qualquer marcador temporário de busca por coordenada
-        tempCoordMarkerLayer.clearLayers();
-
-        if (searchTerm === '') {
-            // Se o campo de busca estiver vazio, apenas exibe todos os marcadores e recentraliza
-            showMessageModal("Busca", "Exibindo todas as equipes.");
-            renderMarkers(allMarkers, true); // Recentraliza para todos os marcadores
-        } else {
-            // Tenta parsear como coordenadas (Lat,Lon)
-            const latLngMatch = searchTerm.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
-            if (latLngMatch) {
-                const searchLat = parseFloat(latLngMatch[1]);
-                const searchLon = parseFloat(latLngMatch[2]);
-
-                if (isNaN(searchLat) || isNaN(searchLon)) {
-                    showMessageModal("Atenção", "Formato de coordenada inválido. Use 'Latitude,Longitude'.");
-                    return;
-                }
-
-                // Adiciona um marcador roxo temporário na coordenada pesquisada
-                const purplePinIcon = createPinIcon('#6200EE'); // Cor primária do VigiOn (roxo)
-                L.marker([searchLat, searchLon], { icon: purplePinIcon }).addTo(tempCoordMarkerLayer)
-                    .bindPopup(`<strong>Coordenada Pesquisada:</strong><br>Lat: ${searchLat}<br>Lon: ${searchLon}`)
-                    .openPopup();
-
-                // Centraliza o mapa na coordenada pesquisada
-                map.setView([searchLat, searchLon], Math.max(map.getZoom(), 15)); // Aumenta o zoom se for muito baixo
-
-                // Define o raio de busca para 2km
-                const searchRadiusKm = 2; 
-                const nearbyTeams = allMarkers.filter(location => {
-                    const lat = parseFloat(location.latitude);
-                    const lon = parseFloat(location.longitude);
-                    if (isNaN(lat) || isNaN(lon)) return false;
-                    const distance = map.distance([searchLat, searchLon], [lat, lon]) / 1000; // Distância em km
-                    return distance <= searchRadiusKm;
+            try {
+                // Prepara os parâmetros para a requisição GET
+                const params = new URLSearchParams({
+                    action: 'login', // Ação para o Apps Script
+                    username: username,
+                    password: password
                 });
 
-                if (nearbyTeams.length > 0) {
-                    showMessageModal("Busca por Coordenadas", `Local da coordenada marcado. ${nearbyTeams.length} equipes encontradas em um raio de ${searchRadiusKm} km.`);
+                const requestUrl = `${APPS_SCRIPT_AUTH_URL}?${params.toString()}`;
+                console.log("URL da requisição API (Login):", requestUrl); 
+
+                const response = await fetch(requestUrl); // Requisição GET
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Erro HTTP na resposta da API (Login):", response.status, errorText);
+                    throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
+                }
+
+                const responseData = await response.json(); 
+                console.log("Dados recebidos da API (Login):", responseData); 
+
+                if (responseData.status === "sucesso" && responseData.data.autenticado === true) {
+                    const userDataToStore = {
+                        id: responseData.data.id, // O ID real do usuário do Apps Script
+                        username: responseData.data.id, // Mantém para compatibilidade
+                        password: password, // Salva a senha para re-autenticação após atualização de perfil
+                        nomeCompleto: responseData.data.nome, 
+                        company: responseData.data.empresa || 'N/A', 
+                        autenticado: responseData.data.autenticado, 
+                        tipoAcesso: responseData.data.tipoAcesso || 'Visitante', 
+                        statusUsuario: responseData.data.statusUsuario || 'N/A',
+                        rememberMe: rememberMeCheckbox.checked 
+                    };
+                    localStorage.setItem('vigion_user_data', JSON.stringify(userDataToStore));
+
+                    showMessage("Login Bem-Sucedido", "Redirecionando para o Dashboard...", () => {
+                        window.location.replace('dashboard.html'); 
+                    }, true);
+
                 } else {
-                    showMessageModal("Busca por Coordenadas", `Local da coordenada marcado. Nenhuma equipe encontrada em um raio de ${searchRadiusKm} km.`);
+                    showMessage("Erro de Login", responseData.message || "Credenciais inválidas. Tente novamente.", null, false);
                 }
 
-            } else {
-                // Se não for coordenada, busca por nome da equipe
-                const foundLocation = allMarkers.find(location => 
-                    String(location.nome).toLowerCase().includes(searchTerm)
-                );
-
-                if (foundLocation) {
-                    // Centraliza o mapa no marcador da equipe encontrada
-                    map.flyTo([foundLocation.latitude, foundLocation.longitude], 16); // Voa para a localização com zoom 16
-                    showMessageModal("Busca por Nome", `Equipe "${foundLocation.nome}" encontrada e focada no mapa.`);
-                } else {
-                    showMessageModal("Busca por Nome", `Nenhuma equipe encontrada com o nome "${searchTerm}".`);
-                }
-            }
-        }
-    }
-
-
-    /**
-     * Converte uma string de data/hora do formato "YYYY-MM-DDTHH:mm" (datetime-local)
-     * para "DD/MM/YYYY HH:mm:ss".
-     * Adiciona ":00" para segundos, pois o input datetime-local não os fornece.
-     */
-    function convertDatetimeLocalToSheetFormat(datetimeLocalString) {
-        if (!datetimeLocalString) return '';
-        // Exemplo: "2025-07-14T16:40"
-        const [datePart, timePart] = datetimeLocalString.split('T'); // ["2025-07-14", "16:40"]
-        const [year, month, day] = datePart.split('-'); // ["2025", "07", "14"]
-        
-        // Adiciona ":00" para os segundos
-        const formattedTime = `${timePart}:00`; // "16:40:00"
-
-        return `${day}/${month}/${year} ${formattedTime}`; // "14/07/2025 16:40:00"
-    }
-
-    /**
-     * Busca os dados de histórico via Google Apps Script e atualiza os marcadores no mapa.
-     * Esta função é chamada pelo botão "Buscar Histórico".
-     */
-    async function fetchHistorico() {
-        if (!map) {
-            console.warn("Mapa não inicializado. Pulando fetchHistorico.");
-            showMessageModal("Erro", "Mapa não está pronto para exibir o histórico.");
-            return;
-        }
-
-        const startDateInput = document.getElementById('hist-date-start');
-        const endDateInput = document.getElementById('hist-date-end');
-        const centerLatInput = document.getElementById('hist-center-lat');
-        const centerLonInput = document.getElementById('hist-center-lon');
-        const radiusKmInput = document.getElementById('hist-radius-km');
-
-        // Obtém os valores dos inputs
-        const rawStartDate = startDateInput.value; 
-        const rawEndDate = endDateInput.value;   
-        const centerLat = parseFloat(centerLatInput.value);
-        const centerLon = parseFloat(centerLonInput.value);
-        const radiusKm = parseFloat(radiusKmInput.value);
-
-        // Validação dos campos de data
-        if (!rawStartDate || !rawEndDate) {
-            showMessageModal("Atenção", "Por favor, selecione as datas de início e fim para buscar o histórico.");
-            return;
-        }
-
-        // Validação dos campos de coordenada e raio
-        if (isNaN(centerLat) || isNaN(centerLon) || isNaN(radiusKm) || radiusKm <= 0) {
-            showMessageModal("Atenção", "Por favor, insira coordenadas válidas (Latitude, Longitude) e um Raio positivo para a pesquisa de proximidade.");
-            return;
-        }
-
-        // Converte os valores de data para o formato esperado pelo Apps Script (DD/MM/YYYY HH:mm:ss)
-        const formattedStartDate = convertDatetimeLocalToSheetFormat(rawStartDate);
-        const formattedEndDate = convertDatetimeLocalToSheetFormat(rawEndDate);
-
-        const userDataString = localStorage.getItem('vigion_user_data');
-        if (!userDataString) {
-            console.error("Dados do usuário não encontrados no localStorage para buscar histórico.");
-            showMessageModal("Erro", "Sua sessão expirou. Por favor, faça login novamente.");
-            logout();
-            return;
-        }
-        const userData = JSON.parse(userDataString);
-        const username = userData.id;
-        const password = userData.password;
-
-        if (!username || !password) {
-            console.error("Username ou password ausentes nos dados do usuário para buscar histórico.");
-            showMessageModal("Erro", "Dados de login incompletos. Por favor, faça login novamente.");
-            logout();
-            return;
-        }
-
-        // Limpa os marcadores de localização atual e histórico antes de carregar novos dados
-        markersLayer.clearLayers();
-        allMarkers = [];
-        historicoMarkers.forEach(m => map.removeLayer(m));
-        historicoMarkers = [];
-        currentHistoricoData = []; // Limpa os dados de histórico anteriores para PDF
-
-        // Construção manual da query string para usar espaços literais nas datas
-        // Não usar encodeURIComponent para startDate e endDate, pois o Apps Script espera espaços literais.
-        let queryString = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-        queryString += `&startDate=${formattedStartDate}`; // formattedStartDate já contém espaços literais
-        queryString += `&endDate=${formattedEndDate}`;     // formattedEndDate já contém espaços literais
-        queryString += `&centerLat=${encodeURIComponent(centerLat)}`;
-        queryString += `&centerLon=${encodeURIComponent(centerLon)}`;
-        queryString += `&radiusKm=${encodeURIComponent(radiusKm)}`;
-
-        showMessageModal("Buscando Histórico", "Carregando dados, por favor aguarde...");
-
-        console.log("URL de requisição de histórico:", `${APPS_SCRIPT_FETCH_HISTORICO_URL}?${queryString}`); // Para depuração
-
-        try {
-            const response = await fetch(`${APPS_SCRIPT_FETCH_HISTORICO_URL}?${queryString}`);
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
-            }
-            const result = await response.json();
-
-            if (result.status === "sucesso") {
-                currentHistoricoData = result.data; // Armazena os dados brutos para PDF
-
-                if (currentHistoricoData && currentHistoricoData.length > 0) {
-                    let bounds = L.latLngBounds([]);
-
-                    currentHistoricoData.forEach(item => {
-                        if (item.LATITUDE == null || item.LONGITUDE == null || isNaN(item.LATITUDE) || isNaN(item.LONGITUDE)) {
-                            console.warn(`Pulando item de histórico inválido para ${item.NOME_EQUIPE}: Latitude/Longitude inválidas.`);
-                            return;
-                        }
-
-                        // Usar uma cor diferente para marcadores de histórico, por exemplo, roxo
-                        const pinIcon = createPinIcon('#6200EE'); // Cor primária do VigiOn para histórico
-
-                        const marker = L.marker([item.LATITUDE, item.LONGITUDE], { icon: pinIcon }).addTo(map);
-                        historicoMarkers.push(marker); // Adiciona ao array de histórico para fácil remoção
-
-                        marker.bindPopup(`
-                            <strong>ID:</strong> ${item.ID}<br>
-                            <strong>Nome/Equipe:</strong> ${item.NOME_EQUIPE}<br>
-                            <strong>Data/Hora:</strong> ${formatDateTime(item.DATAHORA)}<br>
-                            <strong>Latitude:</strong> ${item.LATITUDE}<br>
-                            <strong>Longitude:</strong> ${item.LONGITUDE}<br>
-                            <strong>Endereço:</strong> ${item.ENDERECO_ATUAL}<br>
-                            <strong>Velocidade:</strong> ${item.Velocidade} km/h<br>
-                            <strong>Estado:</strong> ${item.ESTADO}<br>
-                            <strong>Protocolo:</strong> ${item.PROTOCOLO}<br>
-                            <strong>Status:</strong> ${item.STATUS}<br>
-                            <strong>Observações:</strong> ${item.OBSERVACOES}
-                        `);
-                        bounds.extend([item.LATITUDE, item.LONGITUDE]);
-                    });
-
-                    map.fitBounds(bounds, { padding: [50, 50] }); // Ajusta o mapa para os marcadores de histórico
-                    showMessageModal("Sucesso", `Histórico carregado com ${historicoMarkers.length} pontos.`);
-                } else {
-                    showMessageModal("Informação", "Nenhum dado de histórico encontrado para o período selecionado ou dentro do raio especificado.");
-                }
-            } else if (result.status === "erro" && result.message && result.message.includes("Autenticação falhou")) {
-                // Se a autenticação falhou, loga o usuário
-                console.error("Autenticação falhou durante fetchHistorico. Deslogando...");
-                showMessageModal("Sessão Expirada", "Sua sessão expirou ou suas credenciais são inválidas. Por favor, faça login novamente.", () => {
-                    logout();
-                });
-            } else {
-                showMessageModal("Erro na Busca de Histórico", result.message || "Não foi possível carregar o histórico.");
-            }
-        } catch (error) {
-            console.error("Erro ao buscar histórico:", error);
-            showMessageModal("Erro de Conexão", `Não foi possível carregar o histórico: ${error.message}.`);
-        }
-    }
-
-    /**
-     * Gera um relatório PDF com os dados do histórico atual, seguindo o layout validado.
-     */
-    function generateHistoricoPdf() {
-        if (currentHistoricoData.length === 0) {
-            showMessageModal("Atenção", "Nenhum dado de histórico para gerar o PDF. Por favor, realize uma busca primeiro.");
-            return;
-        }
-
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-
-        // Título principal
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold'); // Usando 'helvetica' pois 'Poppins' requer carregamento de fonte
-        doc.text("Relatório de Histórico VigiOn", 14, 20);
-        doc.setFont('helvetica', 'normal'); // Reseta para normal
-
-        // Data de Geração
-        doc.setFontSize(10);
-        const now = new Date();
-        const generatedDateText = `Gerado em: ${now.toLocaleString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
-        doc.text(generatedDateText, doc.internal.pageSize.width - 14, 20, { align: 'right' });
-
-        let currentY = 30; // Posição Y inicial para as informações de filtro
-
-        // Seção de Filtros e Resumo
-        doc.setFillColor(249, 249, 249); // Cor de fundo para o bloco de resumo
-        doc.setDrawColor(224, 224, 224); // Cor da borda
-        doc.roundedRect(14, currentY, doc.internal.pageSize.width - 28, 30, 2, 2, 'FD'); // Retângulo arredondado preenchido e com borda
-        
-        doc.setTextColor(85, 85, 85); // Cor do texto para as informações de filtro
-        doc.setFontSize(10);
-        
-        const startDateInput = document.getElementById('hist-date-start');
-        const endDateInput = document.getElementById('hist-date-end');
-        const centerLatInput = document.getElementById('hist-center-lat');
-        const centerLonInput = document.getElementById('hist-center-lon');
-        const radiusKmInput = document.getElementById('hist-radius-km');
-
-        // Formata as datas dos inputs para exibição no PDF
-        const formattedStartDate = startDateInput.value ? new Date(startDateInput.value).toLocaleString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A';
-        const formattedEndDate = endDateInput.value ? new Date(endDateInput.value).toLocaleString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A';
-        const centerLat = centerLatInput.value || 'N/A';
-        const centerLon = centerLonInput.value || 'N/A';
-        const radiusKm = radiusKmInput.value || 'N/A';
-        const totalRegistros = currentHistoricoData.length;
-
-        doc.text(`Período: ${formattedStartDate} a ${formattedEndDate}`, 18, currentY + 7);
-        doc.text(`Filtro de Proximidade: Lat ${centerLat}, Lon ${centerLon}, Raio ${radiusKm} km`, 18, currentY + 14);
-        doc.text(`Total de Registros: ${totalRegistros}`, 18, currentY + 21);
-        doc.setTextColor(0, 0, 0); // Reseta a cor do texto para preto
-        currentY += 40; // Ajusta Y para a tabela
-
-        // Define os cabeçalhos da tabela (simplificados conforme a prévia)
-        const headers = [
-            ["EQUIPE", "DATA/HORA", "LAT", "LON", "ENDEREÇO", "PROT."]
-        ];
-
-        // Mapeia os dados do histórico para o formato da tabela (simplificado)
-        const data = currentHistoricoData.map(item => [
-            item.NOME_EQUIPE,
-            formatDateTime(item.DATAHORA), // Garante formatação consistente
-            item.LATITUDE,
-            item.LONGITUDE,
-            item.ENDERECO_ATUAL,
-            item.PROTOCOLO
-        ]);
-
-        // Configurações da tabela (autoTable)
-        doc.autoTable({
-            startY: currentY,
-            head: headers,
-            body: data,
-            theme: 'striped',
-            headStyles: { fillColor: [90, 115, 212], font: 'helvetica', fontStyle: 'bold', fontSize: 10 }, // Cor e fonte do cabeçalho
-            styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak', font: 'helvetica' }, // Tamanho da fonte e padding
-            columnStyles: {
-                0: { cellWidth: 35 }, // EQUIPE
-                1: { cellWidth: 30 }, // DATA/HORA
-                2: { cellWidth: 20 }, // LAT - Aumentado para evitar quebra de linha
-                3: { cellWidth: 20 }, // LON - Aumentado para evitar quebra de linha
-                4: { cellWidth: 'auto' }, // ENDEREÇO (ajusta automaticamente)
-                5: { cellWidth: 20 }  // PROT.
-            },
-            // Removido o didDrawPage daqui para adicionar o rodapé em um loop separado
-        });
-
-        // Substitui o placeholder __TOTAL_PAGES__ pelo número total de páginas geradas
-        doc.putTotalPages('__TOTAL_PAGES__');
-
-        // Agora, itera por cada página para adicionar o rodapé centralizado
-        const totalPages = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= totalPages; i++) {
-            doc.setPage(i); // Define a página atual
-            doc.setFontSize(10);
-            doc.setTextColor(136, 136, 136); // Cor cinza para o rodapé
-            const footerText = `Página ${i} de ${totalPages} | VigiOn © 2025`;
-            const centerX = doc.internal.pageSize.width / 2;
-            // Adiciona o texto do rodapé centralizado
-            doc.text(footerText, centerX, doc.internal.pageSize.height - 10, { align: 'center' });
-        }
-
-        // Nome do arquivo PDF
-        const filename = `Historico_VigiOn_${now.toISOString().slice(0, 10)}.pdf`;
-        doc.save(filename);
-
-        showMessageModal("PDF Gerado!", `O relatório de histórico foi gerado com sucesso como "${filename}".`);
-    }
-
-
-    /**
-     * Inicia o temporizador para atualização do mapa.
-     * @param {boolean} initialRecenter - Se true, o mapa será recentralizado e ajustado aos marcadores.
-     */
-    function startMapUpdates(initialRecenter = false) {
-        // Limpa qualquer intervalo existente para evitar duplicação
-        if (mapUpdateInterval) {
-            clearInterval(mapUpdateInterval);
-        }
-        // Inicia a primeira busca. Se for a carga inicial, recentraliza.
-        fetchLocalizacoes(initialRecenter);
-        // Configura o intervalo para buscas futuras, SEMPRE sem recentralizar
-        mapUpdateInterval = setInterval(() => fetchLocalizacoes(false), MAP_UPDATE_INTERVAL_MS);
-        console.log("Atualização automática do mapa iniciada.");
-    }
-
-    /** Para o temporizador de atualização do mapa. */
-    function stopMapUpdates() {
-        if (mapUpdateInterval) {
-            clearInterval(mapUpdateInterval);
-            mapUpdateInterval = null;
-            console.log("Atualização automática do mapa parada.");
-        }
-    }
-
-    // --- Funções do Modal de Edição de Perfil ---
-    function openProfileEditModal() {
-        // Redefine o temporizador de inatividade quando o modal é aberto
-        resetInactivityTimer();
-
-        const profileModal = document.getElementById('profileEditModal');
-        const userDataString = localStorage.getItem('vigion_user_data');
-        if (!userDataString) {
-            showMessageModal("Erro", "Dados do usuário não encontrados para edição.");
-            return;
-        }
-        
-        const userData = JSON.parse(userDataString);
-
-        // Preenche os campos do modal com os dados atuais do usuário
-        document.getElementById('editProfileName').value = userData.nomeCompleto || '';
-        document.getElementById('editProfileCompany').value = userData.company || '';
-        // A senha não é preenchida por segurança, o usuário deve digitá-la para alterar
-        // ou deixá-la em branco para manter a atual.
-        document.getElementById('editProfilePassword').value = ''; 
-
-        profileModal.classList.add('show');
-    }
-
-    function cancelProfileEdit() {
-        document.getElementById('profileEditModal').classList.remove('show');
-        // Redefine o temporizador de inatividade ao fechar o modal
-        resetInactivityTimer();
-    }
-
-    document.getElementById('updateProfileButton').addEventListener('click', async () => {
-        const profileModal = document.getElementById('profileEditModal');
-        const updateButton = document.getElementById('updateProfileButton');
-
-        const userDataString = localStorage.getItem('vigion_user_data');
-        if (!userDataString) {
-            showMessageModal("Erro", "Dados do usuário não encontrados. Por favor, faça login novamente.");
-            return;
-        }
-        const userData = JSON.parse(userDataString);
-
-        // O ID é o 'id' salvo no localStorage (que veio do Apps Script)
-        const id = userData.id; 
-        const oldName = userData.nomeCompleto; // O nome completo atual (Coluna B)
-        const newName = document.getElementById('editProfileName').value.trim();
-        const newCompany = document.getElementById('editProfileCompany').value.trim();
-        let newPassword = document.getElementById('editProfilePassword').value.trim();
-
-        // Validação: Verificar se os campos obrigatórios estão preenchidos
-        if (!newName || !newCompany) {
-            showMessageModal("Atenção", "Nome e Empresa são campos obrigatórios. Por favor, preencha-os.");
-            return;
-        }
-
-        // Se a nova senha estiver vazia, usa a senha antiga (do localStorage)
-        if (!newPassword) {
-            newPassword = userData.password; // A senha original deve estar no localStorage
-        }
-        
-        if (!id || !oldName || !newPassword) {
-            // Este caso não deveria acontecer se o checkDashboardAuth for robusto, mas é uma segurança.
-            showMessageModal("Erro de Dados", "Dados de usuário incompletos para atualização. Tente relogar.");
-            return;
-        }
-
-        updateButton.textContent = "Atualizando...";
-        updateButton.disabled = true;
-
-        try {
-            const params = new URLSearchParams({
-                id: id,
-                oldName: oldName,
-                newName: newName,
-                newCompany: newCompany,
-                newPassword: newPassword
-            });
-
-            console.log("Enviando requisição GET para: ", APPS_SCRIPT_UPDATE_PROFILE_URL);
-            console.log("Parâmetros da requisição: ", params.toString());
-
-            const response = await fetch(`${APPS_SCRIPT_UPDATE_PROFILE_URL}?${params.toString()}`); // Requisição GET
-            
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error("Erro HTTP na resposta da API (Atualização de Perfil):", response.status, errorText);
-                throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
-            }
-
-            const responseData = await response.json();
-            console.log("Resposta da API (Atualização de Perfil):", responseData);
-
-            if (responseData.status === "sucesso") {
-                // Fechar o popup imediatamente
-                profileModal.classList.remove('show'); 
-                // Exibir mensagem de sucesso e depois deslogar
-                showMessageModal("Sucesso", "Seu perfil foi atualizado! Por favor, faça login novamente.", () => {
-                    logout(); // Limpa o localStorage e redireciona
-                });
-            } else if (responseData.status === "erro" && responseData.message && responseData.message.includes("Autenticação falhou")) {
-                // Se a autenticação falhou, loga o usuário
-                console.error("Autenticação falhou durante updateProfileButton. Deslogando...");
-                showMessageModal("Sessão Expirada", "Sua sessão expirou ou suas credenciais são inválidas. Por favor, faça login novamente.", () => {
-                    logout();
-                });
-            } else {
-                showMessageModal("Erro na Atualização", responseData.message || "Ocorreu um erro ao atualizar o perfil. Tente novamente.");
-            }
-
-        } catch (error) {
-                // Aqui capturamos erros de rede, JSON inválido ou outros erros na fetch
-                console.error("Erro durante a requisição de atualização de perfil:", error);
-                showMessageModal("Erro de Conexão", "Não foi possível conectar ou processar a atualização do perfil. Tente novamente mais tarde.");
+            } catch (error) {
+                console.error("Erro durante a requisição ou processamento (Login):", error); 
+                showMessage("Erro de Conexão", "Não foi possível conectar ou processar a resposta do servidor. Tente novamente mais tarde.", null, false);
             } finally {
-            updateButton.textContent = "Atualizar";
-            updateButton.disabled = false;
-        }
-    });
-
-    /**
-     * Reinicia o temporizador de inatividade.
-     * Chama logout() se o tempo limite for atingido.
-     */
-    function resetInactivityTimer() {
-        clearTimeout(inactivityTimer); // Limpa qualquer temporizador existente
-        // Define um novo temporizador
-        inactivityTimer = setTimeout(() => {
-            console.log("Usuário inativo por mais de 30 minutos. Deslogando...");
-            // Primeiro, exibe a mensagem para o usuário
-            showMessageModal("Sessão Expirada", "Você foi desconectado devido à inatividade.");
-            // Em seguida, após um breve atraso para o modal ser visível, força o logout.
-            // Isso garante que o usuário veja a mensagem antes de ser redirecionado.
-            setTimeout(() => {
-                logout(); // Isso já limpa o localStorage e redireciona.
-            }, 500); // Atraso de 500ms
-        }, INACTIVITY_TIMEOUT);
-    }
-
-    // --- Funções do Modal de Configurações do Mapa ---
-    function openSettingsModal() {
-        // Redefine o temporizador de inatividade quando o modal é aberto
-        resetInactivityTimer();
-
-        const settingsModal = document.getElementById('settingsModal');
-        // Pre-seleciona a opção atual do mapa, se houver uma salva
-        const currentMapType = localStorage.getItem('vigion_map_type') || 'default';
-        document.querySelector(`input[name="mapView"][value="${currentMapType}"]`).checked = true;
-
-        settingsModal.classList.add('show');
-    }
-
-    function applyMapSettings() {
-        const settingsModal = document.getElementById('settingsModal');
-        const selectedMapType = document.querySelector('input[name="mapView"]:checked').value;
-
-        if (map) { // Verifica se o mapa foi inicializado
-            // Remove a camada atual
-            if (currentTileLayer) {
-                map.removeLayer(currentTileLayer);
+                loginButton.textContent = "Entrar";
+                loginButton.disabled = false;
             }
-            // Adiciona a nova camada selecionada
-            currentTileLayer = tileLayers[selectedMapType];
-            currentTileLayer.addTo(map);
-            // Salva a preferência do usuário
-            localStorage.setItem('vigion_map_type', selectedMapType);
-            console.log(`Tipo de mapa alterado para: ${selectedMapType}`);
-        } else {
-            console.warn("Mapa não inicializado. Não foi possível aplicar as configurações.");
-        }
-
-        settingsModal.classList.remove('show');
-        resetInactivityTimer(); // Reinicia o temporizador ao fechar o modal
-    }
-
-    // --- Funções do Modal de Atalhos ---
-    function openShortcutsModal() {
-        resetInactivityTimer(); // Redefine o temporizador de inatividade
-        document.getElementById('shortcutsModal').classList.add('show');
-    }
-
-    function closeShortcutsModal() {
-        document.getElementById('shortcutsModal').classList.remove('show');
-        resetInactivityTimer(); // Reinicia o temporizador ao fechar o modal
-    }
-
-    // --- Funções do Modal de Cadastros ---
-    function openCadastrosModal() {
-        resetInactivityTimer(); // Redefine o temporizador de inatividade
-        document.getElementById('cadastrosModal').classList.add('show');
-        toggleSidebar(); // Minimiza a sidebar ao abrir o modal
-        showCadastrosTab(activeCadastrosTab); // Abre na aba ativa por padrão (usuários ou empresas)
-    }
-
-    function closeCadastrosModal() {
-        document.getElementById('cadastrosModal').classList.remove('show');
-        resetInactivityTimer(); // Reinicia o temporizador ao fechar o modal
-    }
-
-    function showCadastrosTab(tabName) {
-        activeCadastrosTab = tabName; // Atualiza a aba ativa globalmente
-
-        // Remove a classe 'active' de todos os botões de aba
-        document.querySelectorAll('.cadastros-tab-button').forEach(button => {
-            button.classList.remove('active');
         });
 
-        // Adiciona a classe 'hidden' a todos os conteúdos de aba
-        document.getElementById('cadastrosUsersContent').classList.add('hidden');
-        document.getElementById('cadastrosCompaniesContent').classList.add('hidden');
-
-        // Exibe o conteúdo da aba selecionada e ativa o botão correspondente
-        if (tabName === 'users') {
-            document.getElementById('tabUsers').classList.add('active');
-            document.getElementById('cadastrosUsersContent').classList.remove('hidden');
-        } else if (tabName === 'companies') {
-            document.getElementById('tabCompanies').classList.add('active');
-            document.getElementById('cadastrosCompaniesContent').classList.remove('hidden');
-        }
-    }
-
-    // --- Funções para Modais de Adição (Usuário/Empresa) ---
-
-    // Adiciona o listener ao botão "+ Adicionar" do modal de cadastros
-    document.getElementById('addCadastrosButton').addEventListener('click', () => {
-        if (activeCadastrosTab === 'users') {
-            openAddUserModal();
-        } else if (activeCadastrosTab === 'companies') {
-            openAddCompanyModal();
-        }
-    });
-
-    function openAddUserModal() {
-        resetInactivityTimer();
-        document.getElementById('addUserModal').classList.add('show');
-        // Limpa os campos e define valores padrão
-        const addUserUsernameInput = document.getElementById('addUserUsername');
-        const addUserFullNameInput = document.getElementById('addUserFullName');
-        const addUserCompanySelect = document.getElementById('addUserCompany');
-        const addUserAuthenticationToggle = document.getElementById('addUserAuthentication');
-        const authStatusText = document.getElementById('authStatusText');
-        const addUserAccessSelect = document.getElementById('addUserAccess');
-        const addUserPasswordInput = document.getElementById('addUserPassword');
-
-        addUserUsernameInput.value = '';
-        addUserFullNameInput.value = '';
-        addUserCompanySelect.value = 'Empresa 1'; // Define a primeira opção como padrão
-        addUserAuthenticationToggle.checked = true; // Define como SIM por padrão
-        authStatusText.textContent = 'SIM';
-        addUserAccessSelect.value = 'Usuario'; // Define 'Usuário' como padrão
-        addUserPasswordInput.value = ''; // Senha começa vazia, será preenchida pelo listener
-
-        // Adiciona listener para preencher a senha automaticamente
-        // Remove o listener antes de adicionar para evitar duplicações
-        addUserUsernameInput.removeEventListener('input', updatePasswordBasedOnUsername);
-        addUserUsernameInput.addEventListener('input', updatePasswordBasedOnUsername);
-
-        // Adiciona listener para o toggle de autenticação
-        addUserAuthenticationToggle.removeEventListener('change', updateAuthStatusText);
-        addUserAuthenticationToggle.addEventListener('change', updateAuthStatusText);
-    }
-
-    function closeAddUserModal() {
-        document.getElementById('addUserModal').classList.remove('show');
-        resetInactivityTimer();
-    }
-
-    function updatePasswordBasedOnUsername() {
-        const addUserUsernameInput = document.getElementById('addUserUsername');
-        const addUserPasswordInput = document.getElementById('addUserPassword');
-        const username = addUserUsernameInput.value.trim();
-        if (username) {
-            addUserPasswordInput.value = `${username}@mudar123`;
-        } else {
-            addUserPasswordInput.value = '';
-        }
-    }
-
-    function updateAuthStatusText() {
-        const addUserAuthenticationToggle = document.getElementById('addUserAuthentication');
-        const authStatusText = document.getElementById('authStatusText');
-        authStatusText.textContent = addUserAuthenticationToggle.checked ? 'SIM' : 'NÃO';
-    }
-
-    function saveNewUser() {
-        // Lógica para salvar novo usuário
-        const username = document.getElementById('addUserUsername').value.trim();
-        const fullName = document.getElementById('addUserFullName').value.trim();
-        const company = document.getElementById('addUserCompany').value;
-        const authentication = document.getElementById('addUserAuthentication').checked ? 'SIM' : 'NÃO';
-        const access = document.getElementById('addUserAccess').value;
-        const password = document.getElementById('addUserPassword').value;
-
-        // Validação básica
-        if (!username || !fullName || !company || !access || !password) {
-            showMessageModal("Atenção", "Por favor, preencha todos os campos obrigatórios.");
-            return;
-        }
-
-        console.log("Dados do Novo Usuário:", { username, fullName, company, authentication, access, password });
-        showMessageModal("Cadastro de Usuário", `Usuário "${username}" salvo com sucesso (simulado)!`);
-        closeAddUserModal();
-    }
-
-    function openAddCompanyModal() {
-        resetInactivityTimer();
-        document.getElementById('addCompanyModal').classList.add('show');
-        // Limpa os campos ao abrir o modal e define valores padrão
-        document.getElementById('addCompanyCNPJ').value = '';
-        document.getElementById('addCompanyCompanyName').value = '';
-        document.getElementById('addCompanyOwner').value = '';
-        document.getElementById('addCompanyPhone').value = '';
-        document.getElementById('addCompanyEmail').value = '';
-        document.getElementById('addCompanyAddress').value = '';
-        document.getElementById('addCompanyStatus').checked = true; // Define como ativo por padrão
-        document.getElementById('companyStatusText').textContent = 'Ativo'; // Atualiza o texto do status
-
-        // Adiciona listener para o toggle de status da empresa
-        const addCompanyStatusToggle = document.getElementById('addCompanyStatus');
-        addCompanyStatusToggle.removeEventListener('change', updateCompanyStatusText); // Remove antes para evitar duplicação
-        addCompanyStatusToggle.addEventListener('change', updateCompanyStatusText);
-    }
-
-    function closeAddCompanyModal() {
-        document.getElementById('addCompanyModal').classList.remove('show');
-        resetInactivityTimer();
-    }
-
-    function updateCompanyStatusText() {
-        const addCompanyStatusToggle = document.getElementById('addCompanyStatus');
-        const companyStatusText = document.getElementById('companyStatusText');
-        companyStatusText.textContent = addCompanyStatusToggle.checked ? 'Ativo' : 'Inativo';
-    }
-
-    function saveNewCompany() {
-        // Lógica para salvar nova empresa
-        const cnpj = document.getElementById('addCompanyCNPJ').value.trim();
-        const companyName = document.getElementById('addCompanyCompanyName').value.trim();
-        const owner = document.getElementById('addCompanyOwner').value.trim();
-        const phone = document.getElementById('addCompanyPhone').value.trim();
-        const email = document.getElementById('addCompanyEmail').value.trim();
-        const address = document.getElementById('addCompanyAddress').value.trim();
-        const status = document.getElementById('addCompanyStatus').checked ? 'Ativo' : 'Inativo';
-
-        // Validação básica
-        if (!cnpj || !companyName || !owner || !phone || !email || !address) {
-            showMessageModal("Atenção", "Por favor, preencha todos os campos obrigatórios para a empresa.");
-            return;
-        }
-
-        console.log("Dados da Nova Empresa:", { cnpj, companyName, owner, phone, email, address, status });
-        showMessageModal("Cadastro de Empresa", `Empresa "${companyName}" salva com sucesso (simulado)!`);
-        closeAddCompanyModal();
-    }
-
-    // NOVO: Função para redirecionar para a tela de Permissões
-    function redirectToPermissionsPanel() {
-        window.location.href = 'permissions_panel.html';
-    }
-
-    // --- Inicialização ao Carregar a Página ---
-    window.addEventListener('load', async () => {
-      // 1. Inicializa o mapa e as camadas primeiro.
-      initMap();
-
-      // 2. Em seguida, executa a verificação de autenticação do dashboard.
-      const isAuthenticated = await checkDashboardAuth();
-
-      if (isAuthenticated) {
-        // Se autenticado, garante que o 'search-input' esteja vazio ao iniciar.
-        const searchInput = document.getElementById('search-input');
-        if (searchInput) {
-            searchInput.value = ''; // Garante que o campo esteja vazio
-        }
-        // Inicia o temporizador de inatividade apenas se o usuário estiver autenticado
-        resetInactivityTimer();
-
-        // Adiciona event listeners para reiniciar o temporizador em qualquer interação
-        document.addEventListener('mousemove', resetInactivityTimer);
-        document.addEventListener('keypress', resetInactivityTimer);
-        document.addEventListener('click', resetInactivityTimer);
-        document.addEventListener('scroll', resetInactivityTimer);
-        document.addEventListener('touchstart', resetInactivityTimer); // Para dispositivos touch
-        document.addEventListener('touchmove', resetInactivityTimer); // Para dispositivos touch
-
-        // Inicia a busca de localizações e o intervalo de atualização para a view padrão (Localizar Equipe)
-        // A primeira chamada (no carregamento) deve recentralizar o mapa.
-        startMapUpdates(true); 
-      }
-      // Se não autenticado, checkDashboardAuth já terá redirecionado
-    });
-
-    // Listener para detectar Ctrl+R e atualizar os marcadores sem recentralizar
-    document.addEventListener('keydown', (event) => {
-        // Verifica se é 'r' ou 'R' e se Ctrl (Windows/Linux) ou Cmd (Mac) está pressionado
-        if ((event.key === 'r' || event.key === 'R') && (event.ctrlKey || event.metaKey)) {
-            event.preventDefault(); // Previne o comportamento padrão do navegador (recarregar a página)
-            console.log("Atualização manual acionada (Ctrl+R). Atualizando marcadores sem recentralizar.");
-            fetchLocalizacoes(false); // Atualiza os marcadores sem recentralizar o mapa
-        }
-        // Listener para detectar Ctrl+P e chamar generateHistoricoPdf()
-        if ((event.key === 'p' || event.key === 'P') && (event.ctrlKey || event.metaKey)) {
-            event.preventDefault(); // Previne o comportamento padrão do navegador (imprimir)
-            console.log("Atalho para Imprimir Relatório acionado (Ctrl+P). Gerando PDF do histórico.");
-            generateHistoricoPdf(); // Chama a função para gerar o PDF
-        }
-        // NOVO: Listener para detectar Ctrl+F e chamar a função Localizar Equipe e focar no input
-        if ((event.key === 'f' || event.key === 'F') && (event.ctrlKey || event.metaKey)) {
-            event.preventDefault(); // Previne o comportamento padrão do navegador (abrir busca do navegador)
-            console.log("Atalho para Localizar Equipe acionado (Ctrl+F).");
-            loadView('localizar'); // Chama a função "Localizar Equipe"
-            // Garante que o input de busca esteja focado após a view ser carregada
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.focus();
+        // Habilita o botão Enter no campo de senha
+        passwordInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                loginButton.click();
             }
+        });
+
+        // Estiliza o logo (mantendo o estilo de texto)
+        const logoElement = document.querySelector('.login-container .logo');
+        if (logoElement) {
+            logoElement.style.color = '#6200EE'; 
+            logoElement.style.fontWeight = 'bold';
+            logoElement.style.fontSize = '2.5rem'; 
+            logoElement.style.textShadow = '2px 2px 4px rgba(0,0,0,0.1)'; 
         }
-        // Nota: Interceptar a tecla F5 diretamente para impedir o recarregamento total da página
-        // não é possível na maioria dos navegadores por razões de segurança e controle do navegador.
-        // Ao pressionar F5, a página será totalmente recarregada e o script será reiniciado,
-        // resultando no comportamento de recentralização inicial.
-    });
-  </script>
+    </script>
 </body>
 </html>
