@@ -711,7 +711,6 @@
         padding: 0.5rem 0.8rem;
         border-radius: 0.5rem;
         cursor: pointer;
-        transition: background-color 0.2s ease;
         margin: 0 0.2rem;
     }
     .cadastros-pagination-buttons button.active {
@@ -1448,7 +1447,7 @@
     // **ATENÇÃO: SUBSTITUA ESTA URL PELA URL DO SEU SCRIPT DE ATUALIZAÇÃO DE PERFIL PUBLICADO!**
     const APPS_SCRIPT_UPDATE_PROFILE_URL = "https://script.google.com/macros/s/AKfycbzccQni56-0Yrt44G4JLebbphHAKRfMM95eleOrekkwRVdE6brSrs5mAYMNOj9eXDixQ/exec"; // URL fornecida pelo usuário
     // NOVO: URL da sua API do Google Apps Script para BUSCAR LOCALIZAÇÕES.
-    const APPS_SCRIPT_FETCH_LOCATIONS_URL = "https://script.google.com/macros/s/AKfycbyQP3LZRKaPQzX-HZ_EHi3ENBlEATgKlZeTDE541sts1UoOODJuNkLecFeLKFhDJkJfPw/exec"; 
+    const APPS_SCRIPT_FETCH_LOCATIONS_URL = "https://script.google.com/macros/s/AKfycbyQP3LZRKaPQzX-HZ_EHi3ENBlEATgKlZeTDE541sts1UoOODJuNkLecFeKKFhDJkJfPw/exec"; 
     // NOVO: URL da sua API do Google Apps Script para BUSCAR HISTÓRICO DE LOCALIZAÇÕES.
     // **ATENÇÃO: SUBSTITUA ESTA URL PELA URL DO SEU NOVO SCRIPT DE HISTÓRICO PUBLICADO!**
     const APPS_SCRIPT_FETCH_HISTORICO_URL = "https://script.google.com/macros/s/AKfycbxgLtx18zJcbD_UJZ5gv9Yhn_gcN7XSJPGLL5xFaDbHTKlZcIFd0Wc4jYh8YrYuxZK5/exec"; // URL fornecida pelo usuário
@@ -1713,8 +1712,36 @@
         document.getElementById('loggedInCompany').textContent = userData.company || 'N/A';
         document.getElementById('loggedInAccessType').textContent = userData.tipoAcesso || 'Visitante';
         
+        // NOVO: Aplica as regras de permissão baseadas no tipo de acesso
+        applyAccessPermissions(userData.tipoAcesso);
+
         console.log("Usuário autenticado via localStorage.");
         return true; 
+    }
+
+    /**
+     * Aplica as regras de permissão para exibir ou ocultar botões da sidebar
+     * com base no tipo de acesso do usuário.
+     * @param {string} accessType - O tipo de acesso do usuário (ex: "Master System", "Gestor", "Usuário").
+     */
+    function applyAccessPermissions(accessType) {
+        const isMasterSystem = accessType === 'Master System';
+
+        // Obtém a referência aos elementos <li> que contêm os botões
+        const rotaButtonLi = document.getElementById('btn-rota').closest('li');
+        const cadastrosButtonLi = document.getElementById('btn-cadastros').closest('li');
+        const permissionsButtonLi = document.getElementById('btn-permissions').closest('li');
+
+        // Define a visibilidade dos botões com base no tipo de acesso
+        if (rotaButtonLi) {
+            rotaButtonLi.style.display = isMasterSystem ? 'block' : 'none';
+        }
+        if (cadastrosButtonLi) {
+            cadastrosButtonLi.style.display = isMasterSystem ? 'block' : 'none';
+        }
+        if (permissionsButtonLi) {
+            permissionsButtonLi.style.display = isMasterSystem ? 'block' : 'none';
+        }
     }
 
     /** Inicializa mapa com Leaflet */
@@ -1877,7 +1904,7 @@
         } else if (result.status === "erro" && result.message && result.message.includes("Autenticação falhou")) {
             // Se a autenticação falhou, loga o usuário
             console.error("Autenticação falhou durante fetchLocalizacoes. Deslogando...");
-            showMessageModal("Sessão Expirada", "Sua sessão expirou ou suas credenciais são inválidas. Por favor, faça login novamente.", () => {
+            showMessageModal("Sessão Expirada", "Sua sessão expirou ou suas credenciais são inválicas. Por favor, faça login novamente.", () => {
                 logout();
             });
         } else {
@@ -2400,7 +2427,7 @@
             console.log("Enviando requisição GET para: ", APPS_SCRIPT_UPDATE_PROFILE_URL);
             console.log("Parâmetros da requisição: ", params.toString());
 
-            const response = await fetch(`${APPS_SCRIPT_UPDATE_PROFILE_URL}?${params.toString()}`); // Requisição GET
+            const response = await fetch(`${APPS_SCRIPT_UPDATE_PROFILE_URL}?${params.toString()}`);
             
             if (!response.ok) {
                 const errorText = await response.text();
